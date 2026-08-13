@@ -1,0 +1,16 @@
+{
+  "extends": "adonis-preset-ts/tsconfig.json",
+  "compilerOptions": {
+    "outDir": "build",
+    "rootDir": "./",
+    "sourceMap": true,
+    "types": ["@adonisjs/core", "@adonisjs/lucid", "@adonisjs/auth", "@adonisjs/repl"],
+    "paths": {
+      "App/*": ["app/*"],
+      "Config/*": ["config/*"],
+      "Contracts/*": ["contracts/*"],
+      "Database/*": ["database/*"]
+    }
+  },
+  "include": ["**/*"]
+}

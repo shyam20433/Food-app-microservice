@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  order-postgres:
+    image: postgres:15-alpine
+    container_name: order-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: order_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - order_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d order_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: order-service
+    restart: always
+    ports:
+      - "3335:3335"
+    environment:
+      PORT: 3335
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      APP_KEY: ORDER_SERVICE_SECRET_APP_KEY_12345
+      APP_NAME: order-service
+      DB_CONNECTION: pg
+      PG_HOST: order-postgres
+      PG_PORT: 5432
+      PG_USER: postgres
+      PG_PASSWORD: 1234
+      PG_DB_NAME: order_db
+      JWT_SECRET: super_secret_jwt_key_adonis_user_service
+      RESTAURANT_SERVICE_URL: http://restaurant-service:3334
+    depends_on:
+      order-postgres:
+        condition: service_healthy
+
+volumes:
+  order_pgdata:

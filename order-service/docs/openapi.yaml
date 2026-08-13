@@ -1,0 +1,332 @@
+openapi: 3.0.3
+info:
+  title: Order Microservice API Specifications
+  description: >
+    Independent Order Microservice built with AdonisJS v5 & PostgreSQL (order_db).
+    Manages shopping carts, cart items, order creation, order state transitions, delivery address snapshots, item snapshots, customer order history, and restaurant order management.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3335
+    description: Local Development Server
+
+paths:
+  /health:
+    get:
+      summary: Health Check Probe
+      responses:
+        '200':
+          description: Service is healthy
+  /health/live:
+    get:
+      summary: Liveness Probe
+      responses:
+        '200':
+          description: Service is live
+  /health/ready:
+    get:
+      summary: Readiness Probe (PostgreSQL Check)
+      responses:
+        '200':
+          description: Service and Database are ready
+
+  /cart:
+    get:
+      summary: Get Authenticated User Active Shopping Cart
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cart retrieved successfully
+        '401':
+          description: Unauthorized
+    delete:
+      summary: Clear Shopping Cart
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cart cleared successfully
+
+  /cart/items:
+    post:
+      summary: Add Item to Active Cart
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [restaurant_id, menu_item_id, quantity]
+              properties:
+                restaurant_id:
+                  type: string
+                  format: uuid
+                menu_item_id:
+                  type: string
+                  format: uuid
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: Item added to cart
+        '400':
+          description: Invalid quantity or menu item unavailable
+        '409':
+          description: Cart contains items from another restaurant
+
+  /cart/items/{id}:
+    put:
+      summary: Update Cart Item Quantity
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: Quantity updated
+    delete:
+      summary: Remove Item from Cart
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Item removed from cart
+
+  /orders:
+    post:
+      summary: Checkout & Create Order
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delivery_address]
+              properties:
+                delivery_address:
+                  type: object
+                  required: [house_no, street, city, state, pincode]
+                  properties:
+                    label:
+                      type: string
+                    house_no:
+                      type: string
+                    street:
+                      type: string
+                    area:
+                      type: string
+                    city:
+                      type: string
+                    state:
+                      type: string
+                    pincode:
+                      type: string
+                    latitude:
+                      type: number
+                    longitude:
+                      type: number
+      responses:
+        '201':
+          description: Order created successfully
+        '400':
+          description: Cart empty or menu item unavailable
+    get:
+      summary: Get Customer Order History
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Orders retrieved
+
+  /orders/{id}:
+    get:
+      summary: Get Order Details by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order details retrieved
+        '403':
+          description: Order does not belong to caller
+
+  /orders/{id}/cancel:
+    post:
+      summary: Cancel Customer Order
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order cancelled
+        '409':
+          description: Order state transition invalid (cannot cancel in current status)
+
+  /restaurant-orders:
+    get:
+      summary: Get Restaurant Orders (Restaurant Owner / Admin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: restaurant_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, CONFIRMED, REJECTED, CANCELLED, PREPARING, READY, OUT_FOR_DELIVERY, DELIVERED]
+      responses:
+        '200':
+          description: Restaurant orders list
+        '403':
+          description: Restaurant order access denied
+
+  /restaurant-orders/{id}/confirm:
+    patch:
+      summary: Confirm Order (PENDING -> CONFIRMED)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: restaurant_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order confirmed
+
+  /restaurant-orders/{id}/reject:
+    patch:
+      summary: Reject Order (PENDING -> REJECTED)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: restaurant_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order rejected
+
+  /restaurant-orders/{id}/preparing:
+    patch:
+      summary: Mark Order Preparing (CONFIRMED -> PREPARING)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: restaurant_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order status updated to PREPARING
+
+  /restaurant-orders/{id}/ready:
+    patch:
+      summary: Mark Order Ready (PREPARING -> READY)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: restaurant_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order status updated to READY
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
