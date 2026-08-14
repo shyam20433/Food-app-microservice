@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  payment-db:
+    image: postgres:15-alpine
+    container_name: payment-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: payment_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - payment_db_data:/var/lib/postgresql/data
+
+  payment-service:
+    build: .
+    container_name: payment-service
+    ports:
+      - "3336:3336"
+    environment:
+      PORT: 3336
+      HOST: 0.0.0.0
+      NODE_ENV: development
+      APP_KEY: PAYMENT_SERVICE_SECRET_KEY_9988776655
+      APP_NAME: payment-service
+      DB_CONNECTION: pg
+      PG_HOST: payment-db
+      PG_PORT: 5432
+      PG_USER: postgres
+      PG_PASSWORD: 1234
+      PG_DB_NAME: payment_db
+      JWT_SECRET: super_secret_jwt_key_adonis_user_service
+      ORDER_SERVICE_URL: http://order-service:3335
+      USER_SERVICE_URL: http://user-service:3333
+      DEFAULT_PAYMENT_GATEWAY: MOCK
+    depends_on:
+      - payment-db
+
+volumes:
+  payment_db_data:

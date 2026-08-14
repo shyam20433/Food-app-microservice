@@ -10,8 +10,9 @@ export default class OrderController {
   public async store(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
     const payload = await ctx.request.validate(CreateOrderValidator)
+    const token = ctx.request.header('authorization')
 
-    const order = await this.orderService.checkout(user.id, payload)
+    const order = await this.orderService.checkout(user.id, payload, token)
     return ApiResponse.success(ctx, order, 'Order created successfully', {}, 201)
   }
 

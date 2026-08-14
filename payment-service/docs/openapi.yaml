@@ -1,0 +1,197 @@
+openapi: 3.0.3
+info:
+  title: Payment Microservice API Specifications
+  description: >
+    Independent Payment Microservice built with AdonisJS v5 & PostgreSQL (payment_db).
+    Manages payment lifecycles, payment attempts, gateway abstractions (Mock, Razorpay),
+    refunds, webhooks with event deduplication, and request idempotency.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3336
+    description: Local Development Server
+
+paths:
+  /health:
+    get:
+      summary: Health Check Probe
+      responses:
+        '200':
+          description: Service is healthy
+  /health/live:
+    get:
+      summary: Liveness Probe
+      responses:
+        '200':
+          description: Service is live
+  /health/ready:
+    get:
+      summary: Readiness Probe (PostgreSQL Check)
+      responses:
+        '200':
+          description: Service and Database are ready
+
+  /payments:
+    post:
+      summary: Initiate Payment for an Order
+      description: Fetches authoritative order details from Order Service (:3335). Amount and user ownership are verified server-side. Supports Idempotency-Key header.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+          description: Unique idempotency key to prevent duplicate payment creation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id]
+              properties:
+                order_id:
+                  type: string
+                  format: uuid
+                gateway:
+                  type: string
+                  enum: [MOCK, RAZORPAY]
+                  default: MOCK
+      responses:
+        '201':
+          description: Payment initiated successfully
+        '400':
+          description: Order not payable or invalid request
+        '403':
+          description: Order does not belong to user
+        '404':
+          description: Order not found in Order Service
+    get:
+      summary: Get Customer Payment History
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Payments retrieved
+
+  /payments/{id}:
+    get:
+      summary: Get Payment Details
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Payment details retrieved
+        '403':
+          description: Payment access denied
+        '404':
+          description: Payment not found
+
+  /payments/{id}/pay:
+    post:
+      summary: Execute Payment via Mock Gateway
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [SUCCESS, FAIL]
+                  default: SUCCESS
+      responses:
+        '200':
+          description: Payment processed
+        '409':
+          description: Invalid payment status transition
+
+  /payments/{id}/refund:
+    post:
+      summary: Request Full or Partial Refund
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: number
+                  description: Refund amount in INR
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Refund processed successfully
+        '400':
+          description: Refund amount exceeds remaining paid amount
+
+  /webhooks/{gateway}:
+    post:
+      summary: Process Payment Gateway Webhook
+      description: Deduplicates webhook events via event_id.
+      parameters:
+        - in: path
+          name: gateway
+          required: true
+          schema:
+            type: string
+            enum: [MOCK, RAZORPAY]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook processed
+        '409':
+          description: Webhook event already processed
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

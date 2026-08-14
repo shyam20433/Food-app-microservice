@@ -1,0 +1,350 @@
+openapi: 3.0.3
+info:
+  title: Delivery Microservice API Specifications
+  description: >
+    Independent Delivery Microservice built with AdonisJS v5 & PostgreSQL (delivery_db).
+    Manages delivery partners, Haversine distance-based partner search and assignment,
+    delivery state machine, partner availability, pickup/drop-off snapshots, and status history.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3337
+    description: Local Development Server
+
+paths:
+  /health:
+    get:
+      summary: Health Check Probe
+      responses:
+        '200':
+          description: Service is healthy
+  /health/live:
+    get:
+      summary: Liveness Probe
+      responses:
+        '200':
+          description: Service is live
+  /health/ready:
+    get:
+      summary: Readiness Probe (PostgreSQL Check)
+      responses:
+        '200':
+          description: Service and Database are ready
+
+  /delivery-partners:
+    post:
+      summary: Register Authenticated User as Delivery Partner
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vehicle_type, vehicle_number]
+              properties:
+                vehicle_type:
+                  type: string
+                  enum: [BIKE, SCOOTER, CAR, BICYCLE]
+                vehicle_number:
+                  type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+      responses:
+        '201':
+          description: Partner registered successfully
+        '403':
+          description: User lacks DELIVERY_PARTNER role
+        '409':
+          description: User is already registered as a delivery partner
+
+  /delivery-partners/me:
+    get:
+      summary: Get Authenticated Partner Profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Partner profile retrieved
+    put:
+      summary: Update Partner Profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vehicle_type:
+                  type: string
+                  enum: [BIKE, SCOOTER, CAR, BICYCLE]
+                vehicle_number:
+                  type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+      responses:
+        '200':
+          description: Partner profile updated
+
+  /delivery-partners/me/availability:
+    patch:
+      summary: Update Partner Availability Status & Coordinates
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [availability_status]
+              properties:
+                availability_status:
+                  type: string
+                  enum: [AVAILABLE, BUSY, OFFLINE]
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+      responses:
+        '200':
+          description: Availability status updated
+
+  /delivery-partners/me/delivery:
+    get:
+      summary: Get Currently Active Assigned Delivery for Partner
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Active delivery retrieved
+        '404':
+          description: No active delivery found
+
+  /delivery-partners/me/deliveries:
+    get:
+      summary: Get Partner Delivery History
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Partner delivery history retrieved
+
+  /deliveries:
+    post:
+      summary: Create Delivery for an Order
+      description: Fetches authoritative order details from Order Service (:3335) and pickup address from Restaurant Service (:3334). Initiates auto-assignment to nearest available partner.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id]
+              properties:
+                order_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Delivery created successfully
+        '400':
+          description: Order is not eligible for delivery assignment
+        '404':
+          description: Order or Restaurant not found
+    get:
+      summary: Get Customer Deliveries
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Deliveries retrieved
+
+  /deliveries/{id}:
+    get:
+      summary: Get Delivery Details
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Delivery details retrieved
+        '403':
+          description: Access denied to delivery record
+        '404':
+          description: Delivery not found
+
+  /deliveries/{id}/assign:
+    post:
+      summary: Search Nearest Available Partner & Assign
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Partner assigned successfully
+        '404':
+          description: No available delivery partners found
+
+  /deliveries/{id}/accept:
+    patch:
+      summary: Partner Accept Assignment
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Assignment accepted
+
+  /deliveries/{id}/reject:
+    patch:
+      summary: Partner Reject Assignment
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Assignment rejected and re-assignment triggered
+
+  /deliveries/{id}/pickup:
+    patch:
+      summary: Partner Mark Order Picked Up
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Status updated to PICKED_UP
+
+  /deliveries/{id}/out-for-delivery:
+    patch:
+      summary: Partner Mark Order Out For Delivery
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Status updated to OUT_FOR_DELIVERY
+
+  /deliveries/{id}/delivered:
+    patch:
+      summary: Partner Mark Order Delivered
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Status updated to DELIVERED and partner availability reset to AVAILABLE
+
+  /admin/delivery-partners:
+    get:
+      summary: Admin Get All Delivery Partners
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All partners retrieved
+
+  /admin/delivery-partners/{id}/status:
+    patch:
+      summary: Admin Set Partner Status (ENABLE / DISABLE / DELETE)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Partner status updated
+
+  /admin/deliveries:
+    get:
+      summary: Admin Get All Deliveries
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All deliveries retrieved
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

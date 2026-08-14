@@ -17,4 +17,5 @@ export default Env.rules({
 
   JWT_SECRET: Env.schema.string(),
   RESTAURANT_SERVICE_URL: Env.schema.string(),
+  USER_SERVICE_URL: Env.schema.string.optional(),
 })

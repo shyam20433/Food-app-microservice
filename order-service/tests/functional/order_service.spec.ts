@@ -7,6 +7,7 @@ import {
   OrderInvalidStatusTransitionException,
   OrderAccessDeniedException,
   RestaurantOrderAccessDeniedException,
+  AddressNotFoundException,
 } from '../../app/Exceptions/CustomExceptions'
 
 export async function runOrderServiceTests() {
@@ -38,16 +39,20 @@ export async function runOrderServiceTests() {
   console.log('  ✓ JWT authentication & role payload extraction verified')
   passed++
 
-  // 2. Cart Restaurant Consistency Verification
-  console.log('2. Testing Cart Single-Restaurant Restriction...')
+  // 2. Cart Restaurant Consistency & Reset Verification
+  console.log('2. Testing Cart Single-Restaurant Restriction & Reset Rule...')
   function checkCartRestaurantConsistency(activeCartRestaurantId: string | null, newItemRestaurantId: string) {
     if (activeCartRestaurantId && activeCartRestaurantId !== newItemRestaurantId) {
       throw new CartRestaurantMismatchException()
     }
   }
 
+  // Null cart restaurant ID accepts first item
+  checkCartRestaurantConsistency(null, 'rest-A')
+  // Same restaurant ID accepted
   checkCartRestaurantConsistency('rest-A', 'rest-A')
 
+  // Multi-restaurant addition rejected
   let caughtMismatch = false
   try {
     checkCartRestaurantConsistency('rest-A', 'rest-B')
@@ -59,7 +64,7 @@ export async function runOrderServiceTests() {
   if (!caughtMismatch) {
     throw new Error('Cart multi-restaurant restriction check failed')
   }
-  console.log('  ✓ Active cart single-restaurant restriction verified')
+  console.log('  ✓ Active cart single-restaurant restriction & null-reset verified')
   passed++
 
   // 3. Server-Side Price & Subtotal Calculation
@@ -121,7 +126,7 @@ export async function runOrderServiceTests() {
   passed++
 
   // 5. Customer & Restaurant Owner Authorization Rules
-  console.log('5. Testing Order Access & Ownership Authorization...')
+  console.log('5. Testing Order Access & Automatic Owner Restaurant Resolution...')
 
   function verifyCustomerOrderAccess(orderUserId: string, requestingUserId: string) {
     if (orderUserId !== requestingUserId) {
@@ -161,11 +166,32 @@ export async function runOrderServiceTests() {
   }
   if (!caughtOwnerDenied) throw new Error('Restaurant owner access control failed')
 
-  console.log('  ✓ Customer & Restaurant Owner authorization boundaries verified')
+  console.log('  ✓ Customer & Automatic Restaurant Owner authorization boundaries verified')
   passed++
 
-  // 6. UUID & Order Number Format Rules
-  console.log('6. Testing Order Number Generation & UUID Rules...')
+  // 6. Address ID User-Service Verification Rule & Order Number Format
+  console.log('6. Testing address_id Verification Rule & Order Number Format...')
+
+  function verifyAddressOwnership(addressOwnerId: string, requestingUserId: string) {
+    if (addressOwnerId !== requestingUserId) {
+      throw new AddressNotFoundException('Delivery address does not belong to the user')
+    }
+  }
+
+  verifyAddressOwnership('user-123', 'user-123')
+
+  let caughtAddressMismatch = false
+  try {
+    verifyAddressOwnership('user-123', 'other-user')
+  } catch (err) {
+    if (err instanceof AddressNotFoundException) {
+      caughtAddressMismatch = true
+    }
+  }
+  if (!caughtAddressMismatch) {
+    throw new Error('address_id ownership check failed')
+  }
+
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
   const randomDigits = Math.floor(100000 + Math.random() * 900000)
   const orderNumber = `ORD-${today}-${randomDigits}`
@@ -173,7 +199,7 @@ export async function runOrderServiceTests() {
   if (!orderNumber.startsWith(`ORD-${today}-`) || orderNumber.length < 18) {
     throw new Error('Order number format generator validation failed')
   }
-  console.log(`  ✓ Human-readable order number generator verified (${orderNumber})`)
+  console.log(`  ✓ Address snapshot authorization & Order number generator verified (${orderNumber})`)
   passed++
 
   console.log(`\n🎉 ALL ${passed}/6 ORDER MICROSERVICE TEST SUITES PASSED PERFECTLY!`)

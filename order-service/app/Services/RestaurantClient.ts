@@ -30,6 +30,18 @@ export class RestaurantClient {
     }
   }
 
+  public async getOwnerRestaurants(ownerId: string): Promise<any[]> {
+    try {
+      const response = await axios.get(`${this.baseUrl}/restaurants?owner_id=${ownerId}`, {
+        timeout: 5000,
+      })
+      const list = response.data?.data || response.data || []
+      return Array.isArray(list) ? list.filter((r: any) => r.owner_id === ownerId || r.ownerId === ownerId) : []
+    } catch {
+      return []
+    }
+  }
+
   public async getMenuItem(restaurantId: string, menuItemId: string): Promise<any> {
     try {
       const response = await axios.get(

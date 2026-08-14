@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: user_db_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: user_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: user_microservice
+    restart: always
+    ports:
+      - '3333:3333'
+    environment:
+      PORT: 3333
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      APP_KEY: KCO0051ZDJ70_bc2bm9889nBtiqKsFVL
+      APP_NAME: user-service
+      DB_CONNECTION: pg
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_USER: postgres
+      PG_PASSWORD: 1234
+      PG_DB_NAME: user_db
+      JWT_SECRET: super_secret_jwt_key_adonis_user_service
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:

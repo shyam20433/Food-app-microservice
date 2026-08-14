@@ -3,7 +3,7 @@ info:
   title: Order Microservice API Specifications
   description: >
     Independent Order Microservice built with AdonisJS v5 & PostgreSQL (order_db).
-    Manages shopping carts, cart items, order creation, order state transitions, delivery address snapshots, item snapshots, customer order history, and restaurant order management.
+    Manages shopping carts, cart items, order creation, order state transitions, delivery address snapshots via User Service, item snapshots via Restaurant Service, customer order history, and restaurant order management.
   version: 1.0.0
 servers:
   - url: http://localhost:3335
@@ -121,6 +121,7 @@ paths:
   /orders:
     post:
       summary: Checkout & Create Order
+      description: Accepts an address_id to fetch the authoritative delivery address snapshot from User Service.
       security:
         - BearerAuth: []
       requestBody:
@@ -129,11 +130,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [delivery_address]
               properties:
+                address_id:
+                  type: string
+                  format: uuid
+                  description: UUID of user address in User Service
                 delivery_address:
                   type: object
-                  required: [house_no, street, city, state, pincode]
+                  description: Optional direct address object snapshot
                   properties:
                     label:
                       type: string
@@ -157,7 +161,9 @@ paths:
         '201':
           description: Order created successfully
         '400':
-          description: Cart empty or menu item unavailable
+          description: Cart empty, address not found, or menu item unavailable
+        '404':
+          description: Address or restaurant item not found
     get:
       summary: Get Customer Order History
       security:
@@ -216,12 +222,13 @@ paths:
   /restaurant-orders:
     get:
       summary: Get Restaurant Orders (Restaurant Owner / Admin)
+      description: Automatically resolves restaurants owned by caller via Restaurant Service if restaurant_id query is omitted.
       security:
         - BearerAuth: []
       parameters:
         - in: query
           name: restaurant_id
-          required: true
+          required: false
           schema:
             type: string
             format: uuid
@@ -236,9 +243,9 @@ paths:
         '403':
           description: Restaurant order access denied
 
-  /restaurant-orders/{id}/confirm:
-    patch:
-      summary: Confirm Order (PENDING -> CONFIRMED)
+  /restaurant-orders/{id}:
+    get:
+      summary: Get Restaurant Order Details
       security:
         - BearerAuth: []
       parameters:
@@ -248,8 +255,20 @@ paths:
           schema:
             type: string
             format: uuid
-        - in: query
-          name: restaurant_id
+      responses:
+        '200':
+          description: Restaurant order details retrieved
+        '403':
+          description: Caller does not own the target restaurant
+
+  /restaurant-orders/{id}/confirm:
+    patch:
+      summary: Confirm Order (PENDING -> CONFIRMED)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
           required: true
           schema:
             type: string
@@ -270,12 +289,6 @@ paths:
           schema:
             type: string
             format: uuid
-        - in: query
-          name: restaurant_id
-          required: true
-          schema:
-            type: string
-            format: uuid
       responses:
         '200':
           description: Order rejected
@@ -292,12 +305,6 @@ paths:
           schema:
             type: string
             format: uuid
-        - in: query
-          name: restaurant_id
-          required: true
-          schema:
-            type: string
-            format: uuid
       responses:
         '200':
           description: Order status updated to PREPARING
@@ -310,12 +317,6 @@ paths:
       parameters:
         - in: path
           name: id
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - in: query
-          name: restaurant_id
           required: true
           schema:
             type: string

@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  delivery-service:
+    build: .
+    ports:
+      - '3337:3337'
+    environment:
+      - PORT=3337
+      - NODE_ENV=production
+      - PG_HOST=delivery-postgres
+      - PG_PORT=5432
+      - PG_USER=postgres
+      - PG_PASSWORD=postgres
+      - PG_DB_NAME=delivery_db
+    depends_on:
+      - delivery-postgres
+
+  delivery-postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=delivery_db
+    ports:
+      - '5437:5432'

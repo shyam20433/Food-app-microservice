@@ -41,6 +41,7 @@ services:
       PG_DB_NAME: order_db
       JWT_SECRET: super_secret_jwt_key_adonis_user_service
       RESTAURANT_SERVICE_URL: http://restaurant-service:3334
+      USER_SERVICE_URL: http://user-service:3333
     depends_on:
       order-postgres:
         condition: service_healthy

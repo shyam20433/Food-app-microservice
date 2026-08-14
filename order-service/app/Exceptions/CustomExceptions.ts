@@ -84,6 +84,12 @@ export class UnauthorizedException extends Exception {
   }
 }
 
+export class AddressNotFoundException extends Exception {
+  constructor(message = 'Delivery address not found or does not belong to the user') {
+    super(message, 404, 'E_ADDRESS_NOT_FOUND')
+  }
+}
+
 export class BadRequestException extends Exception {
   constructor(message = 'Bad request') {
     super(message, 400, 'E_BAD_REQUEST')
