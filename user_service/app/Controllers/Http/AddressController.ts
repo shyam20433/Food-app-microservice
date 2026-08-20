@@ -1,4 +1,5 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
+import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { AddressRepository } from 'App/Repositories/AddressRepository'
 import { ApiResponse } from 'App/Response/ApiResponse'
 import CreateAddressValidator from 'App/Validators/CreateAddressValidator'
@@ -16,7 +17,12 @@ export default class AddressController {
   }
 
   public async show(ctx: HttpContextContract) {
-    const address = await addressRepo.findById(ctx.params.id)
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
+    const address = await addressRepo.findById(id)
     if (!address) {
       return ApiResponse.error(ctx, 'Address not found', 404)
     }
@@ -47,8 +53,13 @@ export default class AddressController {
   }
 
   public async update(ctx: HttpContextContract) {
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const payload = await ctx.request.validate(UpdateAddressValidator)
-    const address = await addressRepo.update(ctx.params.id, {
+    const address = await addressRepo.update(id, {
       label: payload.label,
       houseNo: payload.house_no,
       street: payload.street,
@@ -64,17 +75,27 @@ export default class AddressController {
   }
 
   public async setDefault(ctx: HttpContextContract) {
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const userId = (ctx.auth as any)?.user?.id || ctx.request.input('user_id')
     if (!userId) {
       return ApiResponse.error(ctx, 'user_id is required', 400)
     }
 
-    const address = await addressRepo.setDefault(ctx.params.id, userId)
+    const address = await addressRepo.setDefault(id, userId)
     return ApiResponse.success(ctx, address, 'Primary default address updated successfully')
   }
 
   public async destroy(ctx: HttpContextContract) {
-    const address = await addressRepo.setStatus(ctx.params.id, 'DELETED' as any)
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
+    const address = await addressRepo.setStatus(id, 'DELETED' as any)
     return ApiResponse.success(ctx, address, 'Address deleted successfully')
   }
 }

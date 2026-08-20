@@ -1,4 +1,5 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
+import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { PaymentService } from 'App/Services/PaymentService'
 import { ApiResponse } from 'App/Response/ApiResponse'
 import CreatePaymentValidator from 'App/Validators/CreatePaymentValidator'
@@ -33,20 +34,28 @@ export default class PaymentController {
 
   public async show(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const paymentId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
-    const payment = await this.paymentService.getPaymentById(user.id, user.roles, paymentId)
+    const payment = await this.paymentService.getPaymentById(user.id, user.roles, id)
     return ApiResponse.success(ctx, payment, 'Payment details retrieved successfully')
   }
 
   public async pay(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const paymentId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const payload = await ctx.request.validate(ProcessPaymentValidator)
 
     const payment = await this.paymentService.processMockPayment(
       user.id,
-      paymentId,
+      id,
       payload.action || 'SUCCESS'
     )
     return ApiResponse.success(ctx, payment, `Mock payment execution: ${payment.status}`)
@@ -54,13 +63,17 @@ export default class PaymentController {
 
   public async refund(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const paymentId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const payload = await ctx.request.validate(CreateRefundValidator)
 
     const refund = await this.paymentService.requestRefund(
       user.id,
       user.roles,
-      paymentId,
+      id,
       payload.amount,
       payload.reason
     )

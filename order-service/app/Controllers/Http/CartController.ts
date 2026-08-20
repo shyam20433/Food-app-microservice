@@ -1,4 +1,5 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
+import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { CartService } from 'App/Services/CartService'
 import { ApiResponse } from 'App/Response/ApiResponse'
 import CreateCartItemValidator from 'App/Validators/CreateCartItemValidator'
@@ -23,18 +24,26 @@ export default class CartController {
 
   public async updateItem(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const cartItemId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const payload = await ctx.request.validate(UpdateCartItemValidator)
 
-    const cart = await this.cartService.updateItemQuantity(user.id, cartItemId, payload.quantity)
+    const cart = await this.cartService.updateItemQuantity(user.id, id, payload.quantity)
     return ApiResponse.success(ctx, cart, 'Cart item quantity updated successfully')
   }
 
   public async removeItem(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const cartItemId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
-    const cart = await this.cartService.removeItem(user.id, cartItemId)
+    const cart = await this.cartService.removeItem(user.id, id)
     return ApiResponse.success(ctx, cart, 'Item removed from cart successfully')
   }
 

@@ -1,4 +1,5 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
+import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { DeliveryPartnerService } from 'App/Services/DeliveryPartnerService'
 import { DeliveryService } from 'App/Services/DeliveryService'
 import { ApiResponse } from 'App/Response/ApiResponse'
@@ -17,10 +18,14 @@ export default class AdminDeliveryController {
   }
 
   public async setPartnerStatus(ctx: HttpContextContract) {
-    const partnerId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const status = ctx.request.input('status') as Status
 
-    const partner = await this.partnerService.adminSetPartnerStatus(partnerId, status)
+    const partner = await this.partnerService.adminSetPartnerStatus(id, status)
     return ApiResponse.success(ctx, partner, `Partner status set to '${partner.status}'`)
   }
 

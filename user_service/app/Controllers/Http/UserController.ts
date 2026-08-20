@@ -1,4 +1,5 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
+import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { UserRepository } from 'App/Repositories/UserRepository'
 import { UserRoleRepository } from 'App/Repositories/UserRoleRepository'
 import { AuditLogService } from 'App/Services/AuditLogService'
@@ -28,7 +29,12 @@ export default class UserController {
   }
   
   public async show(ctx: HttpContextContract) {
-    const user = await this.userRepo.findById(ctx.params.id)
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
+    const user = await this.userRepo.findById(id)
     if (!user) {
       return ApiResponse.error(ctx, 'User not found', 404)
     }
@@ -36,9 +42,14 @@ export default class UserController {
   }
 
   public async update(ctx: HttpContextContract) {
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const payload = await ctx.request.validate(UpdateUserValidator)
     const currentUser = (ctx.auth as any)?.user
-    const user = await this.userRepo.update(ctx.params.id, {
+    const user = await this.userRepo.update(id, {
       name: payload.name,
       email: payload.email,
       phoneNumber: payload.phone_number,
@@ -56,7 +67,12 @@ export default class UserController {
   }
 
   public async destroy(ctx: HttpContextContract) {
-    const user = await this.userRepo.setStatus(ctx.params.id, UserStatus.DELETED)
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
+    const user = await this.userRepo.setStatus(id, UserStatus.DELETED)
     return ApiResponse.success(ctx, user, 'User deleted successfully')
   }
 

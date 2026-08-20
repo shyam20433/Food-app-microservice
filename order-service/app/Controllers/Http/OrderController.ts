@@ -1,4 +1,5 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
+import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { OrderService } from 'App/Services/OrderService'
 import { ApiResponse } from 'App/Response/ApiResponse'
 import CreateOrderValidator from 'App/Validators/CreateOrderValidator'
@@ -26,17 +27,25 @@ export default class OrderController {
 
   public async show(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const orderId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
-    const order = await this.orderService.getUserOrderById(user.id, orderId)
+    const order = await this.orderService.getUserOrderById(user.id, id)
     return ApiResponse.success(ctx, order, 'Order retrieved successfully')
   }
 
   public async cancel(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const orderId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
-    const order = await this.orderService.cancelOrder(user.id, orderId)
+    const order = await this.orderService.cancelOrder(user.id, id)
     return ApiResponse.success(ctx, order, 'Order cancelled successfully')
   }
 }

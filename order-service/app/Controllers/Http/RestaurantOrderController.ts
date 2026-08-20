@@ -1,4 +1,5 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
+import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { OrderService } from 'App/Services/OrderService'
 import { ApiResponse } from 'App/Response/ApiResponse'
 import PaginationValidator from 'App/Validators/PaginationValidator'
@@ -21,20 +22,28 @@ export default class RestaurantOrderController {
 
   public async show(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const orderId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
-    const order = await this.orderService.getRestaurantOrderById(user.id, user.roles, orderId)
+    const order = await this.orderService.getRestaurantOrderById(user.id, user.roles, id)
     return ApiResponse.success(ctx, order, 'Restaurant order retrieved successfully')
   }
 
   public async confirm(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const orderId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
     const updatedOrder = await this.orderService.updateRestaurantOrderStatus(
       user.id,
       user.roles,
-      orderId,
+      id,
       OrderStatus.CONFIRMED
     )
     return ApiResponse.success(ctx, updatedOrder, 'Order confirmed successfully')
@@ -42,12 +51,16 @@ export default class RestaurantOrderController {
 
   public async reject(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const orderId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
     const updatedOrder = await this.orderService.updateRestaurantOrderStatus(
       user.id,
       user.roles,
-      orderId,
+      id,
       OrderStatus.REJECTED
     )
     return ApiResponse.success(ctx, updatedOrder, 'Order rejected successfully')
@@ -55,12 +68,16 @@ export default class RestaurantOrderController {
 
   public async preparing(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const orderId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
     const updatedOrder = await this.orderService.updateRestaurantOrderStatus(
       user.id,
       user.roles,
-      orderId,
+      id,
       OrderStatus.PREPARING
     )
     return ApiResponse.success(ctx, updatedOrder, 'Order status updated to PREPARING')
@@ -68,12 +85,16 @@ export default class RestaurantOrderController {
 
   public async ready(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const orderId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
     const updatedOrder = await this.orderService.updateRestaurantOrderStatus(
       user.id,
       user.roles,
-      orderId,
+      id,
       OrderStatus.READY
     )
     return ApiResponse.success(ctx, updatedOrder, 'Order status updated to READY')

@@ -1,4 +1,5 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
+import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { RestaurantService } from 'App/Services/RestaurantService'
 import { ApiResponse } from 'App/Response/ApiResponse'
 import CreateRestaurantValidator from 'App/Validators/CreateRestaurantValidator'
@@ -10,7 +11,7 @@ export default class RestaurantController {
   private restaurantService = new RestaurantService()
 
   public async store(ctx: HttpContextContract) {
-    const user = (ctx.auth as any).user
+    const user = (ctx as any).auth.user
     const payload = await ctx.request.validate(CreateRestaurantValidator)
 
     const restaurant = await this.restaurantService.createRestaurant(user.id, user.roles, payload)
@@ -24,14 +25,22 @@ export default class RestaurantController {
   }
 
   public async show(ctx: HttpContextContract) {
-    const id = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const restaurant = await this.restaurantService.getRestaurantById(id)
     return ApiResponse.success(ctx, restaurant, 'Restaurant retrieved successfully')
   }
 
   public async update(ctx: HttpContextContract) {
-    const user = (ctx.auth as any).user
-    const id = ctx.params.id
+    const user = (ctx as any).auth.user
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const payload = await ctx.request.validate(UpdateRestaurantValidator)
 
     const restaurant = await this.restaurantService.updateRestaurant(
@@ -44,24 +53,36 @@ export default class RestaurantController {
   }
 
   public async destroy(ctx: HttpContextContract) {
-    const user = (ctx.auth as any).user
-    const id = ctx.params.id
+    const user = (ctx as any).auth.user
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
     const restaurant = await this.restaurantService.deleteRestaurant(id, user.id, user.roles)
     return ApiResponse.success(ctx, restaurant, 'Restaurant soft deleted successfully')
   }
 
   public async restore(ctx: HttpContextContract) {
-    const user = (ctx.auth as any).user
-    const id = ctx.params.id
+    const user = (ctx as any).auth.user
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
     const restaurant = await this.restaurantService.restoreRestaurant(id, user.id, user.roles)
     return ApiResponse.success(ctx, restaurant, 'Restaurant restored successfully')
   }
 
   public async updateStatus(ctx: HttpContextContract) {
-    const user = (ctx.auth as any).user
-    const id = ctx.params.id
+    const user = (ctx as any).auth.user
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const payload = await ctx.request.validate(UpdateRestaurantStatusValidator)
 
     const restaurant = await this.restaurantService.setRestaurantStatus(

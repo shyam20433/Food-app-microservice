@@ -1,4 +1,5 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
+import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { DeliveryService } from 'App/Services/DeliveryService'
 import { AssignmentService } from 'App/Services/AssignmentService'
 import { ApiResponse } from 'App/Response/ApiResponse'
@@ -25,11 +26,15 @@ export default class DeliveryController {
 
   public async show(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const deliveryId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
     const token = ctx.request.header('authorization')
 
     const delivery = await this.deliveryService.getDeliveryById(
-      deliveryId,
+      id,
       user.id,
       user.roles,
       token
@@ -48,26 +53,38 @@ export default class DeliveryController {
 
   public async accept(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const deliveryId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
-    const delivery = await this.deliveryService.acceptAssignment(deliveryId, user.id)
+    const delivery = await this.deliveryService.acceptAssignment(id, user.id)
     return ApiResponse.success(ctx, delivery, 'Delivery assignment accepted successfully')
   }
 
   public async reject(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const deliveryId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
-    const delivery = await this.assignmentService.handlePartnerRejection(deliveryId, user.id)
+    const delivery = await this.assignmentService.handlePartnerRejection(id, user.id)
     return ApiResponse.success(ctx, delivery, 'Delivery assignment rejected successfully')
   }
 
   public async pickup(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const deliveryId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
     const delivery = await this.deliveryService.updateDeliveryStatus(
-      deliveryId,
+      id,
       user.id,
       DeliveryStatus.PICKED_UP
     )
@@ -76,10 +93,14 @@ export default class DeliveryController {
 
   public async outForDelivery(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const deliveryId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
     const delivery = await this.deliveryService.updateDeliveryStatus(
-      deliveryId,
+      id,
       user.id,
       DeliveryStatus.OUT_FOR_DELIVERY
     )
@@ -88,10 +109,14 @@ export default class DeliveryController {
 
   public async delivered(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const deliveryId = ctx.params.id
+    const { id } = await ctx.request.validate({
+      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
+      messages: { 'id.uuid': 'id must be a valid UUID' },
+      data: { ...ctx.params, ...ctx.request.all() },
+    })
 
     const delivery = await this.deliveryService.updateDeliveryStatus(
-      deliveryId,
+      id,
       user.id,
       DeliveryStatus.DELIVERED
     )
