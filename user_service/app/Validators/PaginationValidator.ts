@@ -11,7 +11,9 @@ export default class PaginationValidator {
   })
 
   public messages: CustomMessages = {
-    'page.range': 'Page must be between 1 and 10000',
-    'limit.range': 'Limit must be between 1 and 100',
+    'page.number': 'page must be a valid number',
+    'page.range': 'page must be between 1 and 10000',
+    'limit.number': 'limit must be a valid number',
+    'limit.range': 'limit must be between 1 and 100',
   }
 }

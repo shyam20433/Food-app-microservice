@@ -9,23 +9,24 @@ import paginationConfig from 'Config/pagination'
 import UpdateUserValidator from 'App/Validators/UpdateUserValidator'
 import ChangePasswordValidator from 'App/Validators/ChangePasswordValidator'
 import AssignRoleValidator from 'App/Validators/AssignRoleValidator'
+import PaginationValidator from 'App/Validators/PaginationValidator'
 
 export default class UserController {
   private userRepo = new UserRepository()
   private userRoleRepo = new UserRoleRepository()
 
   public async index(ctx: HttpContextContract) {
-    const page = Number(ctx.request.input('page', 1))
-    const limit = Number(ctx.request.input('limit', paginationConfig.defaultLimit))
-    const status = ctx.request.input('status') as UserStatus
+    const params = await ctx.request.validate(PaginationValidator)
+    const page = params.page || 1
+    const limit = params.limit || paginationConfig.defaultLimit
+    const status = params.status as UserStatus
 
     const users = await this.userRepo.findAll({ status })
     const sliced = users.slice((page - 1) * limit, page * limit)
     const paginated = PaginationHelper.format(sliced, users.length, page, limit)
-
     return ApiResponse.success(ctx, paginated.data, 'Users fetched successfully', paginated.meta)
   }
-
+  
   public async show(ctx: HttpContextContract) {
     const user = await this.userRepo.findById(ctx.params.id)
     if (!user) {

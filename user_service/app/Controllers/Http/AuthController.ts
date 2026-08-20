@@ -24,7 +24,6 @@ export default class AuthController {
 
   public async register(ctx: HttpContextContract) {
     const payload = await ctx.request.validate(RegisterValidator)
-
     const user = await this.userRepo.insert({
       name: payload.name,
       email: payload.email,
