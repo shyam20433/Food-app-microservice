@@ -6,6 +6,7 @@ import { RestaurantClient } from 'App/Services/RestaurantClient'
 import { UserClient } from 'App/Services/UserClient'
 import { OrderStateService } from 'App/Services/OrderStateService'
 import Order from 'App/Models/Order'
+import { publishEvent } from 'App/Services/RabbitMQService'
 import { OrderStatus } from 'App/Constants/OrderStatus'
 import { CartStatus } from 'App/Constants/CartStatus'
 import { Status } from 'App/Constants/Status'
@@ -121,10 +122,95 @@ export class OrderService {
       await trx.commit()
 
       const resultOrder = await this.orderRepo.findById(order.id)
+
+      // 10. Publish order.created event to RabbitMQ
+      publishEvent('order.created', {
+        order_id: resultOrder!.id,
+        order_number: resultOrder!.orderNumber,
+        user_id: resultOrder!.userId,
+        restaurant_id: resultOrder!.restaurantId,
+        total_amount: resultOrder!.totalAmount,
+        delivery_address: resultOrder!.deliveryAddress,
+        items: resultOrder!.items,
+      })
+
       return resultOrder!
     } catch (error) {
       await trx.rollback()
       throw error
+    }
+  }
+
+  public async handlePaymentSucceeded(event: { order_id: string; payment_id?: string }) {
+    const order = await this.orderRepo.findById(event.order_id)
+    if (!order) return
+
+    if (order.orderStatus === OrderStatus.PENDING) {
+      OrderStateService.validateTransition(order.orderStatus, OrderStatus.CONFIRMED)
+      const updatedOrder = await this.orderRepo.updateOrderStatus(order.id, OrderStatus.CONFIRMED)
+
+      console.log(`[OrderService] Order ${order.id} confirmed via payment.succeeded event`)
+
+      await publishEvent('order.confirmed', {
+        order_id: updatedOrder.id,
+        order_number: updatedOrder.orderNumber,
+        user_id: updatedOrder.userId,
+        restaurant_id: updatedOrder.restaurantId,
+        total_amount: updatedOrder.totalAmount,
+        delivery_address: updatedOrder.deliveryAddress,
+      })
+    }
+  }
+
+  public async handlePaymentFailed(event: { order_id: string; reason?: string }) {
+    const order = await this.orderRepo.findById(event.order_id)
+    if (!order) return
+
+    if (order.orderStatus === OrderStatus.PENDING) {
+      await this.orderRepo.updateOrderStatus(order.id, OrderStatus.CANCELLED)
+      console.log(`[OrderService] Order ${order.id} cancelled via payment.failed event`)
+    }
+  }
+
+  public async handleDeliveryStatusUpdated(event: { order_id: string; status: string }) {
+    try {
+      const order = await this.orderRepo.findById(event.order_id)
+      if (!order) return
+
+      let targetStatus: OrderStatus | null = null
+      if (event.status === 'PICKED_UP' || event.status === 'PICKUP_COMPLETED') {
+        targetStatus = OrderStatus.OUT_FOR_DELIVERY
+      } else if (event.status === 'OUT_FOR_DELIVERY') {
+        targetStatus = OrderStatus.OUT_FOR_DELIVERY
+      } else if (event.status === 'DELIVERED') {
+        targetStatus = OrderStatus.DELIVERED
+      }
+
+      if (targetStatus && order.orderStatus !== targetStatus) {
+        if (OrderStateService.isTransitionAllowed(order.orderStatus, targetStatus)) {
+          await this.orderRepo.updateOrderStatus(order.id, targetStatus)
+          console.log(`[OrderService] Order ${order.id} status synced to ${targetStatus}`)
+        } else if (targetStatus === OrderStatus.OUT_FOR_DELIVERY) {
+          if (order.orderStatus === OrderStatus.CONFIRMED) {
+            await this.orderRepo.updateOrderStatus(order.id, OrderStatus.PREPARING)
+          }
+          const current = await this.orderRepo.findById(order.id)
+          if (current?.orderStatus === OrderStatus.PREPARING) {
+            await this.orderRepo.updateOrderStatus(order.id, OrderStatus.READY)
+          }
+          await this.orderRepo.updateOrderStatus(order.id, OrderStatus.OUT_FOR_DELIVERY)
+          console.log(`[OrderService] Order ${order.id} status synced to OUT_FOR_DELIVERY`)
+        } else if (targetStatus === OrderStatus.DELIVERED) {
+          const current = await this.orderRepo.findById(order.id)
+          if (current && current.orderStatus !== OrderStatus.OUT_FOR_DELIVERY) {
+            await this.orderRepo.updateOrderStatus(order.id, OrderStatus.OUT_FOR_DELIVERY)
+          }
+          await this.orderRepo.updateOrderStatus(order.id, OrderStatus.DELIVERED)
+          console.log(`[OrderService] Order ${order.id} status synced to DELIVERED`)
+        }
+      }
+    } catch (err) {
+      console.error(`[OrderService] Failed syncing delivery status for order ${event.order_id}:`, err)
     }
   }
 

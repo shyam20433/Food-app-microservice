@@ -11,7 +11,8 @@ export default class RoleController {
   }
 
   public async show(ctx: HttpContextContract) {
-    const role = await this.roleRepo.findByName(ctx.params.name || ctx.params.id)
+    const { params } = ctx
+    const role = await this.roleRepo.findByName(params.name || params.id)
     if (!role) {
       return ApiResponse.error(ctx, 'Role not found', 404)
     }

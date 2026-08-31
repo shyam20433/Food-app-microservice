@@ -5,6 +5,7 @@ export default class CreateAddressValidator {
   constructor(protected ctx: HttpContextContract) {}
 
   public schema = schema.create({
+    user_id: schema.string.optional({ trim: true }, [rules.uuid()]),
     label: schema.string.optional({ trim: true }, [rules.maxLength(30)]),
     house_no: schema.string({ trim: true }, [rules.maxLength(100)]),
     street: schema.string({ trim: true }, [rules.maxLength(255)]),

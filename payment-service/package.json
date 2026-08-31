@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@adonisjs/assembler": "^5.9.5",
+    "@types/amqplib": "^0.10.8",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "18.19.0",
     "@types/uuid": "^9.0.7",
@@ -28,6 +29,7 @@
     "@adonisjs/lucid": "^18.4.0",
     "@adonisjs/validator": "^13.0.0",
     "axios": "^1.6.8",
+    "amqplib": "^0.10.3",
     "jsonwebtoken": "^9.0.2",
     "luxon": "^3.4.4",
     "ms": "^2.1.3",

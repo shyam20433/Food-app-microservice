@@ -16,7 +16,7 @@ export class JwtService {
   }
 
   public static generateToken(payload: JwtPayload): string {
-    const expiresIn = (Env.get('JWT_EXPIRES_IN', '15m') || '15m') as SignOptions['expiresIn']
+    const expiresIn = (Env.get('JWT_EXPIRES_IN', '30d') || '30d') as SignOptions['expiresIn']
     const options: SignOptions = { expiresIn }
     return jwt.sign(payload, this.getSecret(), options)
   }
@@ -42,7 +42,7 @@ export class JwtService {
   }
 
   public static getRefreshTokenExpiration(): DateTime {
-    return DateTime.now().plus({ days: 7 })
+    return DateTime.now().plus({ days: 30 })
   }
 
   public generateAccessToken(payload: JwtPayload): string {

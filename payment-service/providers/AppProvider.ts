@@ -1,21 +1,23 @@
 import { ApplicationContract } from '@ioc:Adonis/Core/Application'
+import { subscribeToEvent } from 'App/Services/RabbitMQService'
 
 export default class AppProvider {
   constructor(protected app: ApplicationContract) {}
 
-  public register() {
-    // Register your own bindings
-  }
+  public register() {}
 
-  public async boot() {
-    // IoC container is ready
-  }
+  public async boot() {}
 
   public async ready() {
-    // App is ready
+    if (this.app.environment === 'web') {
+      const { PaymentService } = await import('App/Services/PaymentService')
+      const paymentService = new PaymentService()
+
+      await subscribeToEvent('payment_order_created_queue', 'order.created', async (data) => {
+        await paymentService.handleOrderCreated(data)
+      })
+    }
   }
 
-  public async shutdown() {
-    // Cleanup, disconnect connections
-  }
+  public async shutdown() {}
 }

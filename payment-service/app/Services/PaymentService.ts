@@ -7,6 +7,7 @@ import { OrderClient } from 'App/Services/OrderClient'
 import { PaymentGatewayFactory } from 'App/Services/PaymentGateway/PaymentGatewayFactory'
 import { PaymentStateService } from 'App/Services/PaymentStateService'
 import Payment from 'App/Models/Payment'
+import { publishEvent } from 'App/Services/RabbitMQService'
 import Refund from 'App/Models/Refund'
 import { PaymentStatus } from 'App/Constants/PaymentStatus'
 import { PaymentAttemptStatus } from 'App/Constants/PaymentAttemptStatus'
@@ -162,10 +163,45 @@ export class PaymentService {
       await trx.commit()
 
       const updated = await this.paymentRepo.findById(payment.id)
+
+      if (targetStatus === PaymentStatus.SUCCESS) {
+        publishEvent('payment.succeeded', {
+          payment_id: updated!.id,
+          order_id: updated!.orderId,
+          amount: updated!.amount,
+          transaction_id: updated!.gatewayPaymentId,
+        })
+      } else {
+        publishEvent('payment.failed', {
+          payment_id: updated!.id,
+          order_id: updated!.orderId,
+          reason: 'Mock payment failed',
+        })
+      }
+
       return updated!
     } catch (err) {
       await trx.rollback()
       throw err
+    }
+  }
+
+  public async handleOrderCreated(event: { order_id: string; user_id: string; total_amount: number }) {
+    const existing = await this.paymentRepo.findByOrderId(event.order_id)
+    if (existing) return
+
+    try {
+      await this.paymentRepo.create({
+        orderId: event.order_id,
+        userId: event.user_id,
+        amount: event.total_amount,
+        currency: 'INR',
+        status: PaymentStatus.PENDING,
+        gateway: PaymentGateway.MOCK,
+      })
+      console.log(`[PaymentService] Auto-created pending payment for order ${event.order_id}`)
+    } catch (err) {
+      console.error(`[PaymentService] Failed auto-creating payment for order ${event.order_id}:`, err)
     }
   }
 

@@ -23,7 +23,8 @@ export default class AuthController {
   private addressRepo = new AddressRepository()
 
   public async register(ctx: HttpContextContract) {
-    const payload = await ctx.request.validate(RegisterValidator)
+    const { request } = ctx
+    const payload = await request.validate(RegisterValidator)
     const user = await this.userRepo.insert({
       name: payload.name,
       email: payload.email,
@@ -56,8 +57,8 @@ export default class AuthController {
 
     AuditLogService.log('USER_REGISTERED', {
       userId: user.id,
-      ipAddress: ctx.request.ip(),
-      userAgent: ctx.request.header('user-agent'),
+      ipAddress: request.ip(),
+      userAgent: request.header('user-agent'),
     })
 
     return ApiResponse.success(
@@ -74,7 +75,8 @@ export default class AuthController {
   }
 
   public async registerFull(ctx: HttpContextContract) {
-    const payload = await ctx.request.validate(RegisterFullValidator)
+    const { request } = ctx
+    const payload = await request.validate(RegisterFullValidator)
 
     const trx = await Database.transaction()
 
@@ -132,8 +134,8 @@ export default class AuthController {
 
       AuditLogService.log('USER_REGISTERED_FULL', {
         userId: user.id,
-        ipAddress: ctx.request.ip(),
-        userAgent: ctx.request.header('user-agent'),
+        ipAddress: request.ip(),
+        userAgent: request.header('user-agent'),
       })
 
       return ApiResponse.success(
@@ -154,7 +156,8 @@ export default class AuthController {
   }
 
   public async login(ctx: HttpContextContract) {
-    const payload = await ctx.request.validate(LoginValidator)
+    const { request } = ctx
+    const payload = await request.validate(LoginValidator)
 
     const user = await this.userRepo.findByEmail(payload.email)
     if (!user) {
@@ -179,8 +182,8 @@ export default class AuthController {
 
     AuditLogService.log('USER_LOGIN', {
       userId: user.id,
-      ipAddress: ctx.request.ip(),
-      userAgent: ctx.request.header('user-agent'),
+      ipAddress: request.ip(),
+      userAgent: request.header('user-agent'),
     })
 
     return ApiResponse.success(
@@ -195,7 +198,8 @@ export default class AuthController {
   }
 
   public async refresh(ctx: HttpContextContract) {
-    const rawRefreshToken = ctx.request.input('refresh_token')
+    const { request } = ctx
+    const rawRefreshToken = request.input('refresh_token')
     if (!rawRefreshToken) {
       return ApiResponse.error(ctx, 'refresh_token is required', 400)
     }
@@ -236,23 +240,25 @@ export default class AuthController {
   }
 
   public async logout(ctx: HttpContextContract) {
-    const rawRefreshToken = ctx.request.input('refresh_token')
+    const { request, auth } = ctx
+    const rawRefreshToken = request.input('refresh_token')
     if (rawRefreshToken) {
       await this.refreshTokenRepo.deleteByRawToken(rawRefreshToken)
     }
 
-    const currentUser = (ctx.auth as any)?.user
+    const currentUser = (auth as any)?.user
     AuditLogService.log('USER_LOGOUT', {
       userId: currentUser?.id,
-      ipAddress: ctx.request.ip(),
-      userAgent: ctx.request.header('user-agent'),
+      ipAddress: request.ip(),
+      userAgent: request.header('user-agent'),
     })
 
     return ApiResponse.success(ctx, null, 'Logged out successfully')
   }
 
   public async me(ctx: HttpContextContract) {
-    const currentUser = (ctx.auth as any)?.user
+    const { auth } = ctx
+    const currentUser = (auth as any)?.user
     const userId = currentUser?.id
     if (!userId) {
       return ApiResponse.error(ctx, 'Unauthorized', 401)

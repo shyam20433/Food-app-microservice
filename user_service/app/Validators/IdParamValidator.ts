@@ -8,6 +8,11 @@ export default class IdParamValidator {
     id: schema.string({}, [rules.uuid()]),
   })
 
+  public data = {
+    ...this.ctx.params,
+    ...this.ctx.request.all(),
+  }
+
   public messages: CustomMessages = {
     'id.uuid': 'id must be a valid UUID',
     'id.required': 'id is required',

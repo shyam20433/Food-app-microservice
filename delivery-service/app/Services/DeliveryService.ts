@@ -7,6 +7,7 @@ import { RestaurantClient } from 'App/Services/RestaurantClient'
 import { AssignmentService } from 'App/Services/AssignmentService'
 import { DeliveryStateService } from 'App/Services/DeliveryStateService'
 import Delivery from 'App/Models/Delivery'
+import { publishEvent } from 'App/Services/RabbitMQService'
 import { DeliveryStatus } from 'App/Constants/DeliveryStatus'
 import { PartnerAvailability } from 'App/Constants/PartnerAvailability'
 import { Roles } from 'App/Constants/Roles'
@@ -176,10 +177,63 @@ export class DeliveryService {
       await trx.commit()
 
       const updated = await this.deliveryRepo.findById(delivery.id)
+
+      publishEvent('delivery.status_updated', {
+        delivery_id: updated!.id,
+        order_id: updated!.orderId,
+        status: targetStatus,
+      })
+
       return updated!
     } catch (err) {
       await trx.rollback()
       throw err
+    }
+  }
+
+  public async handleOrderConfirmed(event: { order_id: string; user_id?: string; restaurant_id: string; delivery_address: any }) {
+    const existing = await this.deliveryRepo.findByOrderId(event.order_id)
+    if (existing) return
+
+    try {
+      const restaurant = await this.restaurantClient.getRestaurant(event.restaurant_id)
+      const changedBy = event.user_id || '00000000-0000-0000-0000-000000000000'
+
+      const trx = await Database.transaction()
+      let delivery: Delivery
+      try {
+        delivery = await this.deliveryRepo.create(
+          {
+            orderId: event.order_id,
+            restaurantId: event.restaurant_id,
+            pickupAddress: restaurant,
+            deliveryAddress: event.delivery_address,
+            status: DeliveryStatus.ASSIGNING,
+          },
+          { client: trx }
+        )
+
+        await this.historyRepo.createHistory(
+          delivery.id,
+          DeliveryStatus.ASSIGNING,
+          changedBy,
+          { client: trx }
+        )
+
+        await trx.commit()
+      } catch (err) {
+        await trx.rollback()
+        throw err
+      }
+
+      try {
+        await this.assignmentService.assignNearestPartner(delivery.id, changedBy)
+        console.log(`[DeliveryService] Auto-assigned delivery for order ${event.order_id}`)
+      } catch {
+        console.warn(`[DeliveryService] Created delivery for order ${event.order_id}, waiting for available partner`)
+      }
+    } catch (err) {
+      console.error(`[DeliveryService] Failed handling order.confirmed event for order ${event.order_id}:`, err)
     }
   }
 

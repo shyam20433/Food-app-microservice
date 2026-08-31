@@ -1,44 +1,77 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
-import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { AddressRepository } from 'App/Repositories/AddressRepository'
 import { ApiResponse } from 'App/Response/ApiResponse'
 import CreateAddressValidator from 'App/Validators/CreateAddressValidator'
 import UpdateAddressValidator from 'App/Validators/UpdateAddressValidator'
+import IdParamValidator from 'App/Validators/IdParamValidator'
+
 const addressRepo = new AddressRepository()
+
 export default class AddressController {
+  private async isOwnerOrAdmin(user: any, targetUserId: string): Promise<boolean> {
+    if (!user) return false
+    if (user.id === targetUserId) return true
+    if (!user.roles) {
+      await user.load('roles')
+    }
+    const userRoleNames = user.roles ? user.roles.map((r: any) => r.name) : []
+    return userRoleNames.includes('ADMIN') || userRoleNames.includes('SUPER_ADMIN')
+  }
+
   public async index(ctx: HttpContextContract) {
-    const userId = (ctx.auth as any)?.user?.id || ctx.request.input('user_id')
-    if (!userId) {
+    const { request, auth } = ctx
+    const currentUser = (auth as any)?.user
+    const inputUserId = request.input('user_id')
+    const targetUserId = inputUserId || currentUser?.id
+
+    if (!targetUserId) {
       return ApiResponse.error(ctx, 'user_id is required', 400)
     }
 
-    const addresses = await addressRepo.findByUserId(userId)
+    const canAccess = await this.isOwnerOrAdmin(currentUser, targetUserId)
+    if (!canAccess) {
+      return ApiResponse.error(ctx, 'Forbidden: You cannot access addresses for another user', 403)
+    }
+
+    const addresses = await addressRepo.findByUserId(targetUserId)
     return ApiResponse.success(ctx, addresses, 'Addresses fetched successfully')
   }
 
   public async show(ctx: HttpContextContract) {
-    const { id } = await ctx.request.validate({
-      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
-      messages: { 'id.uuid': 'id must be a valid UUID' },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
+    const { request, auth } = ctx
+    const { id } = await request.validate(IdParamValidator)
+    const currentUser = (auth)?.user
+
     const address = await addressRepo.findById(id)
     if (!address) {
       return ApiResponse.error(ctx, 'Address not found', 404)
     }
+
+    const canAccess = await this.isOwnerOrAdmin(currentUser, address.userId)
+    if (!canAccess) {
+      return ApiResponse.error(ctx, 'Forbidden: You do not have permission to view this address', 403)
+    }
+
     return ApiResponse.success(ctx, address, 'Address fetched successfully')
   }
 
   public async store(ctx: HttpContextContract) {
-    const payload = await ctx.request.validate(CreateAddressValidator)
-    const userId = (ctx.auth as any)?.user?.id || ctx.request.input('user_id')
+    const { request, auth } = ctx
+    const payload = await request.validate(CreateAddressValidator)
+    const currentUser = (auth as any)?.user
+    const targetUserId = payload.user_id || request.input('user_id') || currentUser?.id
 
-    if (!userId) {
+    if (!targetUserId) {
       return ApiResponse.error(ctx, 'user_id is required', 400)
     }
 
+    const canAccess = await this.isOwnerOrAdmin(currentUser, targetUserId)
+    if (!canAccess) {
+      return ApiResponse.error(ctx, 'Forbidden: You cannot create an address for another user', 403)
+    }
+
     const address = await addressRepo.insert({
-      userId,
+      userId: targetUserId,
       label: payload.label,
       houseNo: payload.house_no,
       street: payload.street,
@@ -53,13 +86,22 @@ export default class AddressController {
   }
 
   public async update(ctx: HttpContextContract) {
-    const { id } = await ctx.request.validate({
-      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
-      messages: { 'id.uuid': 'id must be a valid UUID' },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
-    const payload = await ctx.request.validate(UpdateAddressValidator)
-    const address = await addressRepo.update(id, {
+    const { request, auth } = ctx
+    const { id } = await request.validate(IdParamValidator)
+    const currentUser = (auth as any)?.user
+
+    const address = await addressRepo.findById(id)
+    if (!address) {
+      return ApiResponse.error(ctx, 'Address not found', 404)
+    }
+
+    const canAccess = await this.isOwnerOrAdmin(currentUser, address.userId)
+    if (!canAccess) {
+      return ApiResponse.error(ctx, 'Forbidden: You do not have permission to update this address', 403)
+    }
+
+    const payload = await request.validate(UpdateAddressValidator)
+    const updatedAddress = await addressRepo.update(id, {
       label: payload.label,
       houseNo: payload.house_no,
       street: payload.street,
@@ -71,31 +113,44 @@ export default class AddressController {
       status: payload.status as any,
     })
 
-    return ApiResponse.success(ctx, address, 'Address updated successfully')
+    return ApiResponse.success(ctx, updatedAddress, 'Address updated successfully')
   }
 
   public async setDefault(ctx: HttpContextContract) {
-    const { id } = await ctx.request.validate({
-      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
-      messages: { 'id.uuid': 'id must be a valid UUID' },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
-    const userId = (ctx.auth as any)?.user?.id || ctx.request.input('user_id')
-    if (!userId) {
-      return ApiResponse.error(ctx, 'user_id is required', 400)
+    const { request, auth } = ctx
+    const { id } = await request.validate(IdParamValidator)
+    const currentUser = (auth as any)?.user
+
+    const address = await addressRepo.findById(id)
+    if (!address) {
+      return ApiResponse.error(ctx, 'Address not found', 404)
     }
 
-    const address = await addressRepo.setDefault(id, userId)
-    return ApiResponse.success(ctx, address, 'Primary default address updated successfully')
+    const canAccess = await this.isOwnerOrAdmin(currentUser, address.userId)
+    if (!canAccess) {
+      return ApiResponse.error(ctx, 'Forbidden: You do not have permission to modify this address', 403)
+    }
+
+    const updatedAddress = await addressRepo.setDefault(id, address.userId)
+    return ApiResponse.success(ctx, updatedAddress, 'Primary default address updated successfully')
   }
 
   public async destroy(ctx: HttpContextContract) {
-    const { id } = await ctx.request.validate({
-      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
-      messages: { 'id.uuid': 'id must be a valid UUID' },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
-    const address = await addressRepo.setStatus(id, 'DELETED' as any)
-    return ApiResponse.success(ctx, address, 'Address deleted successfully')
+    const { request, auth } = ctx
+    const { id } = await request.validate(IdParamValidator)
+    const currentUser = (auth as any)?.user
+
+    const address = await addressRepo.findById(id)
+    if (!address) {
+      return ApiResponse.error(ctx, 'Address not found', 404)
+    }
+
+    const canAccess = await this.isOwnerOrAdmin(currentUser, address.userId)
+    if (!canAccess) {
+      return ApiResponse.error(ctx, 'Forbidden: You do not have permission to delete this address', 403)
+    }
+
+    const deletedAddress = await addressRepo.setStatus(id, 'DELETED' as any)
+    return ApiResponse.success(ctx, deletedAddress, 'Address deleted successfully')
   }
 }
