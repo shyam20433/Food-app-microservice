@@ -16,7 +16,7 @@ export class MockPaymentGateway implements PaymentGatewayInterface {
     return {
       gatewayOrderId: mockGatewayOrderId,
       gatewayPaymentId: mockGatewayPaymentId,
-      status: 'PENDING',
+      status: 'SUCCESS',
       rawPayload: {
         gateway: 'MOCK',
         amount: request.amount,

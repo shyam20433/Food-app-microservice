@@ -92,9 +92,12 @@ export class PaymentService {
       })
 
       // 7. Update Attempt & Payment with gateway references
+      const finalStatus = gatewayRes.status === 'SUCCESS' ? PaymentStatus.SUCCESS : PaymentStatus.PENDING
+      const attemptFinalStatus = gatewayRes.status === 'SUCCESS' ? PaymentAttemptStatus.SUCCESS : PaymentAttemptStatus.PENDING
+
       await this.attemptRepo.updateStatus(
         attempt.id,
-        PaymentAttemptStatus.PENDING,
+        attemptFinalStatus,
         {
           gatewayOrderId: gatewayRes.gatewayOrderId,
           gatewayPaymentId: gatewayRes.gatewayPaymentId,
@@ -104,7 +107,7 @@ export class PaymentService {
 
       await this.paymentRepo.updateStatus(
         payment.id,
-        PaymentStatus.PENDING,
+        finalStatus,
         gatewayRes.gatewayPaymentId,
         { client: trx }
       )
@@ -112,6 +115,16 @@ export class PaymentService {
       await trx.commit()
 
       const result = await this.paymentRepo.findById(payment.id)
+
+      if (finalStatus === PaymentStatus.SUCCESS) {
+        publishEvent('payment.succeeded', {
+          payment_id: result!.id,
+          order_id: result!.orderId,
+          amount: result!.amount,
+          transaction_id: result!.gatewayPaymentId,
+        })
+      }
+
       return result!
     } catch (err) {
       await trx.rollback()
