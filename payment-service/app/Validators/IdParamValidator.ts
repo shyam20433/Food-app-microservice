@@ -4,6 +4,11 @@ import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 export default class IdParamValidator {
   constructor(protected ctx: HttpContextContract) {}
 
+  public data = {
+    ...this.ctx.params,
+    ...this.ctx.request.all(),
+  }
+
   public schema = schema.create({
     id: schema.string({}, [rules.uuid()]),
   })

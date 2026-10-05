@@ -27,6 +27,16 @@ export default class AppProvider {
       await subscribeToEvent('order_delivery_status_queue', 'delivery.status_updated', async (data) => {
         await orderService.handleDeliveryStatusUpdated(data)
       })
+
+      // Saga: payment service confirmed refund → finalize order as CANCELLED
+      await subscribeToEvent('order_refund_processed_queue', 'payment.refund_processed', async (data) => {
+        await orderService.handleRefundProcessed(data)
+      })
+
+      // Saga: payment service failed to refund → compensation: revert order to previous status
+      await subscribeToEvent('order_refund_failed_queue', 'payment.refund_failed', async (data) => {
+        await orderService.handleRefundFailed(data)
+      })
     }
   }
 

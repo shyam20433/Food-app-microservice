@@ -1,5 +1,6 @@
 import Route from '@ioc:Adonis/Core/Route'
 
+
 // Health Check Endpoints
 Route.group(() => {
   Route.get('/', 'HealthController.check')
@@ -21,3 +22,12 @@ Route.group(() => {
 })
   .prefix('/payments')
   .middleware('jwtAuth')
+
+// Admin Payment Routes (ADMIN / SUPER_ADMIN only)
+Route.group(() => {
+  Route.get('/payments', 'AdminPaymentController.index')
+  Route.get('/payments/:id', 'AdminPaymentController.show')
+})
+  .prefix('/admin')
+  .middleware(['jwtAuth', 'role:ADMIN,SUPER_ADMIN'])
+

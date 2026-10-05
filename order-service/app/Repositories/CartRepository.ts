@@ -4,10 +4,7 @@ import { TransactionClientContract } from '@ioc:Adonis/Lucid/Database'
 import { CartNotFoundException } from 'App/Exceptions/CustomExceptions'
 
 export class CartRepository {
-  public async create(
-    data: Partial<Cart>,
-    options?: { client?: TransactionClientContract }
-  ): Promise<Cart> {
+  public async create(data: Partial<Cart>, options?: { client?: TransactionClientContract }): Promise<Cart> {
     const cart = new Cart()
     cart.fill(data)
     if (options?.client) {
@@ -29,11 +26,7 @@ export class CartRepository {
     return await Cart.query().where('id', id).preload('items').first()
   }
 
-  public async updateStatus(
-    id: string,
-    status: CartStatus,
-    options?: { client?: TransactionClientContract }
-  ): Promise<Cart> {
+  public async updateStatus(id: string, status: CartStatus, options?: { client?: TransactionClientContract }): Promise<Cart> {
     const cart = await Cart.find(id)
     if (!cart) {
       throw new CartNotFoundException()
@@ -46,11 +39,7 @@ export class CartRepository {
     return cart
   }
 
-  public async updateRestaurantId(
-    id: string,
-    restaurantId: string | null,
-    options?: { client?: TransactionClientContract }
-  ): Promise<Cart> {
+  public async updateRestaurantId(id: string, restaurantId: string | null, options?: { client?: TransactionClientContract }): Promise<Cart> {
     const cart = await Cart.find(id)
     if (!cart) {
       throw new CartNotFoundException()

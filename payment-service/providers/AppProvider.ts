@@ -16,6 +16,11 @@ export default class AppProvider {
       await subscribeToEvent('payment_order_created_queue', 'order.created', async (data) => {
         await paymentService.handleOrderCreated(data)
       })
+
+      // Saga Step 2: process refund when restaurant requests cancellation
+      await subscribeToEvent('payment_order_cancellation_requested_queue', 'order.cancellation_requested', async (data) => {
+        await paymentService.handleOrderCancellationRequested(data)
+      })
     }
   }
 

@@ -3,6 +3,7 @@ export enum OrderStatus {
   CONFIRMED = 'CONFIRMED',
   REJECTED = 'REJECTED',
   CANCELLED = 'CANCELLED',
+  CANCELLATION_PENDING = 'CANCELLATION_PENDING', // Saga in-flight: waiting for refund confirmation
   PREPARING = 'PREPARING',
   READY = 'READY',
   OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY',

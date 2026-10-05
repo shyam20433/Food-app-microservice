@@ -4,9 +4,18 @@ import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 export default class CreateCartItemValidator {
   constructor(protected ctx: HttpContextContract) {}
 
+  public data = {
+    ...this.ctx.params,
+    ...this.ctx.request.all(),
+    restaurant_id: this.ctx.request.input('restaurant_id') || this.ctx.request.input('restaurantId'),
+    menu_item_id: this.ctx.request.input('menu_item_id') || this.ctx.request.input('menuItemId'),
+  }
+
   public schema = schema.create({
     restaurant_id: schema.string({ trim: true }, [rules.uuid()]),
     menu_item_id: schema.string({ trim: true }, [rules.uuid()]),
+    restaurantId: schema.string.optional({ trim: true }, [rules.uuid()]),
+    menuItemId: schema.string.optional({ trim: true }, [rules.uuid()]),
     quantity: schema.number([rules.range(1, 100)]),
   })
 

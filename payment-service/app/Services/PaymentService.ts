@@ -7,6 +7,7 @@ import { OrderClient } from 'App/Services/OrderClient'
 import { PaymentGatewayFactory } from 'App/Services/PaymentGateway/PaymentGatewayFactory'
 import { PaymentStateService } from 'App/Services/PaymentStateService'
 import Payment from 'App/Models/Payment'
+import PaymentAttempt from 'App/Models/PaymentAttempt'
 import { publishEvent } from 'App/Services/RabbitMQService'
 import Refund from 'App/Models/Refund'
 import { PaymentStatus } from 'App/Constants/PaymentStatus'
@@ -41,40 +42,40 @@ export class PaymentService {
     // 2. Verify order belongs to user and is payable
     await this.orderClient.verifyOrderPayable(order, userId)
 
-    // 3. Check existing successful or pending payment for this order
+    // 3. Check existing payment for this order
     const existing = await this.paymentRepo.findByOrderId(orderId)
-    if (existing) {
-      if (existing.status === PaymentStatus.SUCCESS) {
-        return existing
-      }
-      if (existing.status === PaymentStatus.PENDING || existing.status === PaymentStatus.PROCESSING) {
-        return existing
-      }
+    if (existing && existing.status === PaymentStatus.SUCCESS) {
+      return existing
     }
 
     const selectedGateway = (gatewayName || PaymentGateway.MOCK) as PaymentGateway
 
-    // 4. Create Payment record inside transaction
+    // 4. Create or reuse Payment record inside transaction
     const trx = await Database.transaction()
 
     try {
-      const payment = await this.paymentRepo.create(
-        {
-          orderId: order.id,
-          userId,
-          amount: order.totalAmount,
-          currency: 'INR',
-          status: PaymentStatus.CREATED,
-          gateway: selectedGateway,
-        },
-        { client: trx }
-      )
+      let payment = existing
+      if (!payment) {
+        payment = await this.paymentRepo.create(
+          {
+            orderId: order.id,
+            userId,
+            amount: order.totalAmount,
+            currency: 'INR',
+            status: PaymentStatus.CREATED,
+            gateway: selectedGateway,
+          },
+          { client: trx }
+        )
+      } else {
+        payment.useTransaction(trx)
+      }
 
       // 5. Create initial Payment Attempt
       const attempt = await this.attemptRepo.create(
         {
           paymentId: payment.id,
-          attemptNumber: 1,
+          attemptNumber: (payment.attempts?.length || 0) + 1,
           amount: order.totalAmount,
           status: PaymentAttemptStatus.PENDING,
         },
@@ -117,9 +118,11 @@ export class PaymentService {
       const result = await this.paymentRepo.findById(payment.id)
 
       if (finalStatus === PaymentStatus.SUCCESS) {
+        const targetOrderId = result!.orderId || (result as any).order_id
         publishEvent('payment.succeeded', {
           payment_id: result!.id,
-          order_id: result!.orderId,
+          order_id: targetOrderId,
+          orderId: targetOrderId,
           amount: result!.amount,
           transaction_id: result!.gatewayPaymentId,
         })
@@ -215,6 +218,80 @@ export class PaymentService {
       console.log(`[PaymentService] Auto-created pending payment for order ${event.order_id}`)
     } catch (err) {
       console.error(`[PaymentService] Failed auto-creating payment for order ${event.order_id}:`, err)
+    }
+  }
+
+  public async handleOrderCancellationRequested(event: {
+    order_id: string
+    user_id?: string
+    previous_order_status?: string
+    reason?: string
+  }) {
+    console.log(`[PaymentSaga] Received order.cancellation_requested for order ${event.order_id}`)
+
+    const payment = await this.paymentRepo.findByOrderId(event.order_id)
+
+    // No payment or payment not in a refundable state — saga still completes (no money to return)
+    if (!payment) {
+      console.log(`[PaymentSaga] No payment found for order ${event.order_id}. Completing saga with no refund.`)
+      await publishEvent('payment.refund_processed', {
+        order_id: event.order_id,
+        refund_id: null,
+        amount: 0,
+        previous_order_status: event.previous_order_status,
+      })
+      return
+    }
+
+    const refundableStatuses = [PaymentStatus.SUCCESS, PaymentStatus.PARTIALLY_REFUNDED]
+    if (!refundableStatuses.includes(payment.status)) {
+      console.log(`[PaymentSaga] Payment ${payment.id} is '${payment.status}' — no refund needed. Completing saga.`)
+      await publishEvent('payment.refund_processed', {
+        order_id: event.order_id,
+        refund_id: null,
+        amount: 0,
+        previous_order_status: event.previous_order_status,
+      })
+      return
+    }
+
+    try {
+      const previousRefundsTotal = await this.refundRepo.getSuccessfulRefundsTotal(payment.id)
+      const remainingAmount = Math.round((Number(payment.amount) - previousRefundsTotal) * 100) / 100
+
+      if (remainingAmount <= 0) {
+        console.log(`[PaymentSaga] Payment ${payment.id} already fully refunded. Completing saga.`)
+        await publishEvent('payment.refund_processed', {
+          order_id: event.order_id,
+          refund_id: null,
+          amount: 0,
+          previous_order_status: event.previous_order_status,
+        })
+        return
+      }
+
+      const refund = await this.requestRefund(
+        payment.userId,
+        [Roles.ADMIN],
+        payment.id,
+        remainingAmount,
+        event.reason || 'Order cancelled by restaurant'
+      )
+
+      console.log(`[PaymentSaga] ✅ Auto-refund ₹${remainingAmount} processed for order ${event.order_id}. Publishing payment.refund_processed.`)
+      await publishEvent('payment.refund_processed', {
+        order_id: event.order_id,
+        refund_id: refund.id,
+        amount: remainingAmount,
+        previous_order_status: event.previous_order_status,
+      })
+    } catch (err) {
+      console.error(`[PaymentSaga] ❌ Refund failed for order ${event.order_id}:`, err)
+      await publishEvent('payment.refund_failed', {
+        order_id: event.order_id,
+        reason: (err as Error).message || 'Refund gateway error',
+        previous_order_status: event.previous_order_status,
+      })
     }
   }
 
@@ -321,13 +398,63 @@ export class PaymentService {
     })
 
     try {
+      let payment: Payment | null = null
+
       if (verification.gatewayPaymentId) {
-        const payment = await Payment.findBy('gateway_payment_id', verification.gatewayPaymentId)
-        if (payment) {
-          const targetStatus =
-            verification.status === 'SUCCESS' ? PaymentStatus.SUCCESS : PaymentStatus.FAILED
-          PaymentStateService.validateTransition(payment.status, targetStatus)
-          await this.paymentRepo.updateStatus(payment.id, targetStatus)
+        payment = await Payment.findBy('gateway_payment_id', verification.gatewayPaymentId)
+      }
+
+      if (!payment && verification.gatewayOrderId) {
+        const attempt = await PaymentAttempt.findBy('gateway_order_id', verification.gatewayOrderId)
+        if (attempt) {
+          payment = await Payment.find(attempt.paymentId)
+        }
+      }
+
+      if (!payment && verification.rawPayload) {
+        const orderIdNotes = verification.rawPayload?.payload?.payment?.entity?.notes?.order_id
+        if (orderIdNotes) {
+          payment = await this.paymentRepo.findByOrderId(orderIdNotes)
+        }
+      }
+
+      if (payment) {
+        const targetStatus =
+          verification.status === 'SUCCESS' ? PaymentStatus.SUCCESS : PaymentStatus.FAILED
+        PaymentStateService.validateTransition(payment.status, targetStatus)
+        await this.paymentRepo.updateStatus(payment.id, targetStatus, verification.gatewayPaymentId)
+
+        const latestAttempt = await PaymentAttempt.query()
+          .where('payment_id', payment.id)
+          .orderBy('attempt_number', 'desc')
+          .first()
+
+        if (latestAttempt) {
+          const attemptStatus =
+            verification.status === 'SUCCESS' ? PaymentAttemptStatus.SUCCESS : PaymentAttemptStatus.FAILED
+          await this.attemptRepo.updateStatus(latestAttempt.id, attemptStatus, {
+            gatewayPaymentId: verification.gatewayPaymentId,
+            gatewayOrderId: verification.gatewayOrderId,
+          })
+        }
+
+        if (targetStatus === PaymentStatus.SUCCESS) {
+          const targetOrderId = payment.orderId || (payment as any).order_id
+          await publishEvent('payment.succeeded', {
+            payment_id: payment.id,
+            orderId: targetOrderId,
+            amount: payment.amount,
+            transaction_id: verification.gatewayPaymentId || payment.gatewayPaymentId,
+          })
+          console.log(`[PaymentService] Webhook: Published payment.succeeded for order ${targetOrderId}`)
+        } else {
+          const targetOrderId = payment.orderId || (payment as any).order_id
+          await publishEvent('payment.failed', {
+            payment_id: payment.id,
+            order_id: targetOrderId,
+            orderId: targetOrderId,
+            reason: 'Webhook reported payment failure',
+          })
         }
       }
 
@@ -337,6 +464,12 @@ export class PaymentService {
       await this.webhookRepo.markProcessed(eventRecord.id, 'FAILED')
       throw err
     }
+  }
+
+  public async getAllPayments(
+    options?: { page?: number; limit?: number }
+  ): Promise<{ data: Payment[]; meta: any }> {
+    return await this.paymentRepo.findAll(options)
   }
 
   public async getUserPayments(
@@ -354,7 +487,6 @@ export class PaymentService {
     if (!isAdmin && payment.userId !== userId) {
       throw new PaymentAccessDeniedException()
     }
-
     return payment
   }
 }

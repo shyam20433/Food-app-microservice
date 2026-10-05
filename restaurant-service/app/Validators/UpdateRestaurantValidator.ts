@@ -5,7 +5,13 @@ import { RestaurantStatus } from 'App/Constants/Status'
 export default class UpdateRestaurantValidator {
   constructor(protected ctx: HttpContextContract) {}
 
+  public data = {
+    ...this.ctx.params,
+    ...this.ctx.request.all(),
+  }
+
   public schema = schema.create({
+    id: schema.string.optional({}, [rules.uuid()]),
     name: schema.string.optional({ trim: true }, [rules.maxLength(255)]),
     description: schema.string.optional({ trim: true }, [rules.maxLength(1000)]),
     phone_number: schema.string.optional({ trim: true }, [rules.maxLength(50)]),
@@ -18,6 +24,7 @@ export default class UpdateRestaurantValidator {
   })
 
   public messages: CustomMessages = {
+    'id.uuid': 'id must be a valid UUID',
     'email.email': 'Valid email address is required',
   }
 }

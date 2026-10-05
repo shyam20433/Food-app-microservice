@@ -4,6 +4,11 @@ import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 export class IdParamValidator {
   constructor(protected ctx: HttpContextContract) {}
 
+  public data = {
+    ...this.ctx.params,
+    ...this.ctx.request.all(),
+  }
+
   public schema = schema.create({
     id: schema.string({}, [rules.uuid()]),
   })
@@ -16,6 +21,11 @@ export class IdParamValidator {
 
 export class RestaurantIdParamValidator {
   constructor(protected ctx: HttpContextContract) {}
+
+  public data = {
+    ...this.ctx.params,
+    ...this.ctx.request.all(),
+  }
 
   public schema = schema.create({
     restaurantId: schema.string({}, [rules.uuid()]),
@@ -30,6 +40,11 @@ export class RestaurantIdParamValidator {
 export class RestaurantAndCategoryParamValidator {
   constructor(protected ctx: HttpContextContract) {}
 
+  public data = {
+    ...this.ctx.params,
+    ...this.ctx.request.all(),
+  }
+
   public schema = schema.create({
     restaurantId: schema.string({}, [rules.uuid()]),
     categoryId: schema.string({}, [rules.uuid()]),
@@ -43,6 +58,11 @@ export class RestaurantAndCategoryParamValidator {
 
 export class RestaurantAndItemParamValidator {
   constructor(protected ctx: HttpContextContract) {}
+
+  public data = {
+    ...this.ctx.params,
+    ...this.ctx.request.all(),
+  }
 
   public schema = schema.create({
     restaurantId: schema.string({}, [rules.uuid()]),

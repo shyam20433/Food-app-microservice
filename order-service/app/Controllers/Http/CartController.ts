@@ -1,9 +1,9 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
-import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { CartService } from 'App/Services/CartService'
 import { ApiResponse } from 'App/Response/ApiResponse'
 import CreateCartItemValidator from 'App/Validators/CreateCartItemValidator'
 import UpdateCartItemValidator from 'App/Validators/UpdateCartItemValidator'
+import { IdParamValidator } from 'App/Validators/IdParamValidator'
 
 export default class CartController {
   private cartService = new CartService()
@@ -17,31 +17,21 @@ export default class CartController {
   public async addItem(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
     const payload = await ctx.request.validate(CreateCartItemValidator)
-
     const cart = await this.cartService.addItem(user.id, payload)
     return ApiResponse.success(ctx, cart, 'Item added to cart successfully')
   }
 
   public async updateItem(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const { id } = await ctx.request.validate({
-      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
-      messages: { 'id.uuid': 'id must be a valid UUID' },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
     const payload = await ctx.request.validate(UpdateCartItemValidator)
 
-    const cart = await this.cartService.updateItemQuantity(user.id, id, payload.quantity)
+    const cart = await this.cartService.updateItemQuantity(user.id, payload.id, payload.quantity)
     return ApiResponse.success(ctx, cart, 'Cart item quantity updated successfully')
   }
 
   public async removeItem(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const { id } = await ctx.request.validate({
-      schema: schema.create({ id: schema.string({}, [rules.uuid()]) }),
-      messages: { 'id.uuid': 'id must be a valid UUID' },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
+    const { id } = await ctx.request.validate(IdParamValidator)
 
     const cart = await this.cartService.removeItem(user.id, id)
     return ApiResponse.success(ctx, cart, 'Item removed from cart successfully')

@@ -32,12 +32,7 @@ export default class AuthController {
       password: payload.password,
     })
 
-    const initialRoles: string[] =
-      payload.roles && payload.roles.length > 0
-        ? payload.roles
-        : payload.role
-        ? [payload.role]
-        : [Roles.CUSTOMER]
+    const initialRoles: string[] = payload.roles && payload.roles.length > 0 ? payload.roles : payload.role ? [payload.role] : [Roles.CUSTOMER]
 
     for (const rName of initialRoles) {
       await this.userRoleRepo.assignRole(user.id, rName)
@@ -50,9 +45,7 @@ export default class AuthController {
     const refreshToken = JwtService.generateRefreshToken()
 
     const durationMs = ms(jwtConfig.refreshTokenExpiresIn as any)
-    const expiresAt = DateTime.now().plus({
-      milliseconds: typeof durationMs === 'number' ? durationMs : 604800000,
-    })
+    const expiresAt = DateTime.now().plus({ milliseconds: typeof durationMs === 'number' ? durationMs : 604800000 })
     await this.refreshTokenRepo.insertToken(user.id, refreshToken, expiresAt)
 
     AuditLogService.log('USER_REGISTERED', {
@@ -61,23 +54,12 @@ export default class AuthController {
       userAgent: request.header('user-agent'),
     })
 
-    return ApiResponse.success(
-      ctx,
-      {
-        user,
-        token,
-        refreshToken,
-      },
-      'User registered successfully',
-      {},
-      201
-    )
+    return ApiResponse.success(ctx, { user, token, refreshToken }, 'User registered successfully', {}, 201)
   }
 
   public async registerFull(ctx: HttpContextContract) {
     const { request } = ctx
     const payload = await request.validate(RegisterFullValidator)
-
     const trx = await Database.transaction()
 
     try {
@@ -91,12 +73,7 @@ export default class AuthController {
         { client: trx }
       )
 
-      const initialRoles: string[] =
-        payload.roles && payload.roles.length > 0
-          ? payload.roles
-          : payload.role
-          ? [payload.role]
-          : [Roles.CUSTOMER]
+      const initialRoles: string[] = payload.roles && payload.roles.length > 0 ? payload.roles : payload.role ? [payload.role] : [Roles.CUSTOMER]
 
       for (const rName of initialRoles) {
         await this.userRoleRepo.assignRole(user.id, rName, { client: trx })
@@ -122,14 +99,11 @@ export default class AuthController {
       await trx.commit()
 
       const fullUser = await this.userRepo.findById(user.id)
-
       const token = JwtService.generateToken({ id: user.id, email: user.email })
       const refreshToken = JwtService.generateRefreshToken()
 
       const durationMs = ms(jwtConfig.refreshTokenExpiresIn as any)
-      const expiresAt = DateTime.now().plus({
-        milliseconds: typeof durationMs === 'number' ? durationMs : 604800000,
-      })
+      const expiresAt = DateTime.now().plus({ milliseconds: typeof durationMs === 'number' ? durationMs : 604800000 })
       await this.refreshTokenRepo.insertToken(user.id, refreshToken, expiresAt)
 
       AuditLogService.log('USER_REGISTERED_FULL', {
@@ -138,17 +112,7 @@ export default class AuthController {
         userAgent: request.header('user-agent'),
       })
 
-      return ApiResponse.success(
-        ctx,
-        {
-          user: fullUser,
-          token,
-          refreshToken,
-        },
-        'User, roles, and address created successfully with tokens generated',
-        {},
-        201
-      )
+      return ApiResponse.success(ctx, { user: fullUser, token, refreshToken }, 'User, roles, and address created successfully with tokens generated', {}, 201)
     } catch (error) {
       await trx.rollback()
       throw error
@@ -175,9 +139,7 @@ export default class AuthController {
     const refreshToken = JwtService.generateRefreshToken()
 
     const durationMs = ms(jwtConfig.refreshTokenExpiresIn as any)
-    const expiresAt = DateTime.now().plus({
-      milliseconds: typeof durationMs === 'number' ? durationMs : 604800000,
-    })
+    const expiresAt = DateTime.now().plus({ milliseconds: typeof durationMs === 'number' ? durationMs : 604800000 })
     await this.refreshTokenRepo.insertToken(user.id, refreshToken, expiresAt)
 
     AuditLogService.log('USER_LOGIN', {
@@ -185,16 +147,7 @@ export default class AuthController {
       ipAddress: request.ip(),
       userAgent: request.header('user-agent'),
     })
-
-    return ApiResponse.success(
-      ctx,
-      {
-        user,
-        token,
-        refreshToken,
-      },
-      'Login successful'
-    )
+    return ApiResponse.success(ctx, { user, token, refreshToken }, 'Login successful')
   }
 
   public async refresh(ctx: HttpContextContract) {
@@ -224,19 +177,10 @@ export default class AuthController {
     await this.refreshTokenRepo.deleteByRawToken(rawRefreshToken)
 
     const durationMs = ms(jwtConfig.refreshTokenExpiresIn as any)
-    const expiresAt = DateTime.now().plus({
-      milliseconds: typeof durationMs === 'number' ? durationMs : 604800000,
-    })
+    const expiresAt = DateTime.now().plus({ milliseconds: typeof durationMs === 'number' ? durationMs : 604800000 })
     await this.refreshTokenRepo.insertToken(user.id, newRefreshToken, expiresAt)
 
-    return ApiResponse.success(
-      ctx,
-      {
-        token,
-        refreshToken: newRefreshToken,
-      },
-      'Token refreshed successfully'
-    )
+    return ApiResponse.success(ctx, { token, refreshToken: newRefreshToken }, 'Token refreshed successfully')
   }
 
   public async logout(ctx: HttpContextContract) {

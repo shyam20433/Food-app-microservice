@@ -128,3 +128,9 @@ export class BadRequestException extends CustomException {
     super(message, 'E_BAD_REQUEST', 400)
   }
 }
+
+export class InvalidOtpException extends CustomException {
+  constructor(message = 'Invalid delivery OTP provided') {
+    super(message, 'E_INVALID_DELIVERY_OTP', 400)
+  }
+}

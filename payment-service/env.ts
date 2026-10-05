@@ -20,4 +20,9 @@ export default Env.rules({
   ORDER_SERVICE_URL: Env.schema.string.optional(),
   USER_SERVICE_URL: Env.schema.string.optional(),
   DEFAULT_PAYMENT_GATEWAY: Env.schema.string.optional(),
+
+  // Razorpay (optional — only needed when gateway="RAZORPAY")
+  RAZORPAY_KEY_ID:        Env.schema.string.optional(),
+  RAZORPAY_KEY_SECRET:    Env.schema.string.optional(),
+  RAZORPAY_WEBHOOK_SECRET: Env.schema.string.optional(),
 })

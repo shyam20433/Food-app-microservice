@@ -7,7 +7,13 @@ export default class UpdateUserValidator {
 
   private targetUserId = this.ctx.params.id || (this.ctx.auth as any)?.user?.id
 
+  public data = {
+    ...this.ctx.params,
+    ...this.ctx.request.all(),
+  }
+
   public schema = schema.create({
+    id: schema.string.optional({}, [rules.uuid()]),
     name: schema.string.optional({ trim: true }, [rules.maxLength(150)]),
     email: schema.string.optional({ trim: true }, [
       rules.email(),
@@ -27,6 +33,7 @@ export default class UpdateUserValidator {
   })
 
   public messages: CustomMessages = {
+    'id.uuid': 'id must be a valid UUID',
     'email.unique': 'Email is already taken',
     'phone_number.unique': 'Phone number is already taken',
   }

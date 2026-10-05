@@ -26,7 +26,7 @@ export interface OrderDeliveryDetails {
 }
 
 export class OrderClient {
-  private baseUrl = Env.get('ORDER_SERVICE_URL', 'http://127.0.0.1:3335')
+  private baseUrl = Env.get('ORDER_SERVICE_URL')
 
   public async getOrder(orderId: string, token?: string): Promise<OrderDeliveryDetails> {
     try {
@@ -81,7 +81,6 @@ export class OrderClient {
   }
 
   public async verifyOrderEligibleForDelivery(order: OrderDeliveryDetails): Promise<boolean> {
-    // Eligible status: CONFIRMED, PREPARING, READY
     const eligibleStatuses = ['CONFIRMED', 'PREPARING', 'READY']
     if (!eligibleStatuses.includes(order.orderStatus)) {
       throw new OrderNotReadyForDeliveryException(

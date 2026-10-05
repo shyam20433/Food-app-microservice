@@ -29,6 +29,20 @@ export class DeliveryRepository {
       .first()
   }
 
+  public async findUnassigned(options?: { page?: number; limit?: number }): Promise<{ data: Delivery[]; meta: any }> {
+    const page = options?.page || 1
+    const limit = options?.limit || 20
+
+    const query = Delivery.query()
+      .where('status', DeliveryStatus.ASSIGNING)
+      .whereNull('delivery_partner_id')
+      .orderBy('created_at', 'desc')
+
+    const paginated = await query.paginate(page, limit)
+    const json = paginated.toJSON()
+    return { data: json.data as Delivery[], meta: json.meta }
+  }
+
   public async findActiveByPartner(partnerId: string, options?: any): Promise<Delivery | null> {
     const activeStatuses = [
       DeliveryStatus.ASSIGNED,
@@ -47,7 +61,7 @@ export class DeliveryRepository {
 
   public async findByPartnerHistory(
     partnerId: string,
-    options?: { page?: number; limit?: number }
+    options?: { page?: number; limit?: number; status?: string }
   ): Promise<{ data: Delivery[]; meta: any }> {
     const page = options?.page || 1
     const limit = options?.limit || 20
@@ -56,6 +70,10 @@ export class DeliveryRepository {
       .where('delivery_partner_id', partnerId)
       .preload('partner')
       .orderBy('created_at', 'desc')
+
+    if (options?.status) {
+      query.where('status', options.status.toUpperCase())
+    }
 
     const paginated = await query.paginate(page, limit)
     const json = paginated.toJSON()

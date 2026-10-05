@@ -87,10 +87,10 @@ export default class AddressController {
 
   public async update(ctx: HttpContextContract) {
     const { request, auth } = ctx
-    const { id } = await request.validate(IdParamValidator)
+    const payload = await request.validate(UpdateAddressValidator)
     const currentUser = (auth as any)?.user
 
-    const address = await addressRepo.findById(id)
+    const address = await addressRepo.findById(payload.id)
     if (!address) {
       return ApiResponse.error(ctx, 'Address not found', 404)
     }
@@ -100,8 +100,7 @@ export default class AddressController {
       return ApiResponse.error(ctx, 'Forbidden: You do not have permission to update this address', 403)
     }
 
-    const payload = await request.validate(UpdateAddressValidator)
-    const updatedAddress = await addressRepo.update(id, {
+    const updatedAddress = await addressRepo.update(payload.id, {
       label: payload.label,
       houseNo: payload.house_no,
       street: payload.street,

@@ -14,7 +14,7 @@ export interface UserProfile {
 }
 
 export class UserClient {
-  private baseUrl = Env.get('USER_SERVICE_URL', 'http://127.0.0.1:3333')
+  private baseUrl = Env.get('USER_SERVICE_URL')
 
   public async getUser(userId: string, token?: string): Promise<UserProfile> {
     try {

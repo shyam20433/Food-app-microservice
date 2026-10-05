@@ -1,25 +1,23 @@
 import { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
-import { schema, rules } from '@ioc:Adonis/Core/Validator'
 import { RestaurantService } from 'App/Services/RestaurantService'
 import { ApiResponse } from 'App/Response/ApiResponse'
 import CreateMenuItemValidator from 'App/Validators/CreateMenuItemValidator'
 import UpdateMenuItemValidator from 'App/Validators/UpdateMenuItemValidator'
 import UpdateAvailabilityValidator from 'App/Validators/UpdateAvailabilityValidator'
+import {
+  RestaurantIdParamValidator,
+  RestaurantAndItemParamValidator,
+} from 'App/Validators/IdParamValidator'
 
 export default class MenuItemController {
   private restaurantService = new RestaurantService()
 
   public async store(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const { restaurantId } = await ctx.request.validate({
-      schema: schema.create({ restaurantId: schema.string({}, [rules.uuid()]) }),
-      messages: { 'restaurantId.uuid': 'restaurantId must be a valid UUID' },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
     const payload = await ctx.request.validate(CreateMenuItemValidator)
 
     const menuItem = await this.restaurantService.createMenuItem(
-      restaurantId,
+      payload.restaurantId,
       user.id,
       user.roles,
       payload
@@ -28,49 +26,24 @@ export default class MenuItemController {
   }
 
   public async index(ctx: HttpContextContract) {
-    const { restaurantId } = await ctx.request.validate({
-      schema: schema.create({ restaurantId: schema.string({}, [rules.uuid()]) }),
-      messages: { 'restaurantId.uuid': 'restaurantId must be a valid UUID' },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
+    const { restaurantId } = await ctx.request.validate(RestaurantIdParamValidator)
     const menuItems = await this.restaurantService.getMenuItems(restaurantId)
     return ApiResponse.success(ctx, menuItems, 'Menu items retrieved successfully')
   }
 
   public async show(ctx: HttpContextContract) {
-    const { restaurantId, itemId } = await ctx.request.validate({
-      schema: schema.create({
-        restaurantId: schema.string({}, [rules.uuid()]),
-        itemId: schema.string({}, [rules.uuid()]),
-      }),
-      messages: {
-        'restaurantId.uuid': 'restaurantId must be a valid UUID',
-        'itemId.uuid': 'itemId must be a valid UUID',
-      },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
+    const { restaurantId, itemId } = await ctx.request.validate(RestaurantAndItemParamValidator)
     const menuItem = await this.restaurantService.getMenuItemById(restaurantId, itemId)
     return ApiResponse.success(ctx, menuItem, 'Menu item retrieved successfully')
   }
 
   public async update(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const { restaurantId, itemId } = await ctx.request.validate({
-      schema: schema.create({
-        restaurantId: schema.string({}, [rules.uuid()]),
-        itemId: schema.string({}, [rules.uuid()]),
-      }),
-      messages: {
-        'restaurantId.uuid': 'restaurantId must be a valid UUID',
-        'itemId.uuid': 'itemId must be a valid UUID',
-      },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
     const payload = await ctx.request.validate(UpdateMenuItemValidator)
 
     const menuItem = await this.restaurantService.updateMenuItem(
-      restaurantId,
-      itemId,
+      payload.restaurantId,
+      payload.itemId,
       user.id,
       user.roles,
       payload
@@ -80,22 +53,11 @@ export default class MenuItemController {
 
   public async updateAvailability(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const { restaurantId, itemId } = await ctx.request.validate({
-      schema: schema.create({
-        restaurantId: schema.string({}, [rules.uuid()]),
-        itemId: schema.string({}, [rules.uuid()]),
-      }),
-      messages: {
-        'restaurantId.uuid': 'restaurantId must be a valid UUID',
-        'itemId.uuid': 'itemId must be a valid UUID',
-      },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
     const payload = await ctx.request.validate(UpdateAvailabilityValidator)
 
     const menuItem = await this.restaurantService.setMenuItemAvailability(
-      restaurantId,
-      itemId,
+      payload.restaurantId,
+      payload.itemId,
       user.id,
       user.roles,
       payload.is_available
@@ -105,17 +67,7 @@ export default class MenuItemController {
 
   public async destroy(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const { restaurantId, itemId } = await ctx.request.validate({
-      schema: schema.create({
-        restaurantId: schema.string({}, [rules.uuid()]),
-        itemId: schema.string({}, [rules.uuid()]),
-      }),
-      messages: {
-        'restaurantId.uuid': 'restaurantId must be a valid UUID',
-        'itemId.uuid': 'itemId must be a valid UUID',
-      },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
+    const { restaurantId, itemId } = await ctx.request.validate(RestaurantAndItemParamValidator)
 
     const menuItem = await this.restaurantService.deleteMenuItem(
       restaurantId,
@@ -128,17 +80,7 @@ export default class MenuItemController {
 
   public async restore(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const { restaurantId, itemId } = await ctx.request.validate({
-      schema: schema.create({
-        restaurantId: schema.string({}, [rules.uuid()]),
-        itemId: schema.string({}, [rules.uuid()]),
-      }),
-      messages: {
-        'restaurantId.uuid': 'restaurantId must be a valid UUID',
-        'itemId.uuid': 'itemId must be a valid UUID',
-      },
-      data: { ...ctx.params, ...ctx.request.all() },
-    })
+    const { restaurantId, itemId } = await ctx.request.validate(RestaurantAndItemParamValidator)
 
     const menuItem = await this.restaurantService.restoreMenuItem(
       restaurantId,

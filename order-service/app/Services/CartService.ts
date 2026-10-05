@@ -3,11 +3,7 @@ import { CartItemRepository } from 'App/Repositories/CartItemRepository'
 import { RestaurantClient } from 'App/Services/RestaurantClient'
 import Cart from 'App/Models/Cart'
 import { CartStatus } from 'App/Constants/CartStatus'
-import {
-  CartNotFoundException,
-  CartRestaurantMismatchException,
-  BadRequestException,
-} from 'App/Exceptions/CustomExceptions'
+import { CartNotFoundException, CartRestaurantMismatchException, BadRequestException } from 'App/Exceptions/CustomExceptions'
 
 export class CartService {
   private cartRepo = new CartRepository()
@@ -27,10 +23,7 @@ export class CartService {
     return cart
   }
 
-  public async addItem(
-    userId: string,
-    payload: { restaurant_id: string; menu_item_id: string; quantity: number }
-  ): Promise<Cart> {
+  public async addItem(userId: string, payload: { restaurant_id: string; menu_item_id: string; quantity: number }): Promise<Cart> {
     if (!payload.quantity || payload.quantity <= 0) {
       throw new BadRequestException('Quantity must be greater than 0')
     }
@@ -87,11 +80,7 @@ export class CartService {
     return await this.getCart(userId)
   }
 
-  public async updateItemQuantity(
-    userId: string,
-    cartItemId: string,
-    quantity: number
-  ): Promise<Cart> {
+  public async updateItemQuantity(userId: string, cartItemId: string, quantity: number): Promise<Cart> {
     if (quantity <= 0) {
       throw new BadRequestException('Quantity must be greater than 0. Use DELETE to remove item.')
     }

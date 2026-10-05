@@ -1,3 +1,4 @@
 export enum PaymentGateway {
-  MOCK = 'MOCK',
+  MOCK      = 'MOCK',
+  RAZORPAY  = 'RAZORPAY',
 }

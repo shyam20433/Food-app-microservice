@@ -16,7 +16,7 @@ export interface OrderDetails {
 }
 
 export class OrderClient {
-  private baseUrl = Env.get('ORDER_SERVICE_URL', 'http://127.0.0.1:3335')
+  private baseUrl = Env.get('ORDER_SERVICE_URL')
 
   public async getOrder(orderId: string, token?: string): Promise<OrderDetails> {
     try {
@@ -68,7 +68,6 @@ export class OrderClient {
       throw new OrderAccessDeniedException()
     }
 
-    // Orders in PENDING, CONFIRMED, PREPARING status are payable
     const payableStatuses = ['PENDING', 'CONFIRMED', 'PREPARING']
     if (!payableStatuses.includes(order.orderStatus)) {
       throw new OrderNotPayableException(

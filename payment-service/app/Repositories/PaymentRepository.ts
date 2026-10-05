@@ -35,6 +35,18 @@ export class PaymentRepository {
     return { data: json.data as Payment[], meta: json.meta }
   }
 
+  public async findAll(
+    options?: { page?: number; limit?: number }
+  ): Promise<{ data: Payment[]; meta: any }> {
+    const page = options?.page || 1
+    const limit = options?.limit || 20
+
+    const query = Payment.query().preload('attempts').preload('refunds').orderBy('created_at', 'desc')
+    const paginated = await query.paginate(page, limit)
+    const json = paginated.toJSON()
+    return { data: json.data as Payment[], meta: json.meta }
+  }
+
   public async updateStatus(
     id: string,
     status: PaymentStatus,

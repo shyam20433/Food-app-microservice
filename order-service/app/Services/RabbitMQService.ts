@@ -2,7 +2,7 @@ import amqp, { ChannelModel, Channel } from 'amqplib'
 import Env from '@ioc:Adonis/Core/Env'
 import EventEmitter from 'events'
 
-const localBus = new EventEmitter()
+export const localBus = new EventEmitter()
 localBus.setMaxListeners(100)
 
 let connection: ChannelModel | null = null
@@ -11,6 +11,7 @@ let isConnected = false
 
 const EXCHANGE_NAME = 'food_app_exchange'
 const EXCHANGE_TYPE = 'topic'
+const DLX_EXCHANGE = 'food_app_dlx'
 
 export async function connectRabbitMQ(): Promise<Channel | null> {
   if (channel) return channel
@@ -21,11 +22,10 @@ export async function connectRabbitMQ(): Promise<Channel | null> {
     channel = await connection.createChannel()
     await channel.assertExchange(EXCHANGE_NAME, EXCHANGE_TYPE, { durable: true })
     isConnected = true
-    console.log(`[RabbitMQ] Connected to exchange "${EXCHANGE_NAME}"`)
+    console.log(`[RabbitMQ] Order Service connected to exchange "${EXCHANGE_NAME}"`)
     return channel
   } catch (error) {
     isConnected = false
-    console.warn(`[RabbitMQ] Connection unavailable (${(error as Error).message}). Using internal event bus fallback.`)
     return null
   }
 }
@@ -47,9 +47,9 @@ export async function publishEvent(routingKey: string, message: object): Promise
     console.error(`[RabbitMQ] Publish error for "${routingKey}":`, error)
   }
 
-  // Fallback: emit on in-memory Event Bus
-  console.log(`[EventBus] Emitted event "${routingKey}" via internal fallback`)
+  console.log(`[EventBus] Emitted event "${routingKey}" via localBus`)
   localBus.emit(routingKey, message)
+
   return true
 }
 
@@ -69,10 +69,28 @@ export async function subscribeToEvent(
   try {
     const ch = await connectRabbitMQ()
     if (ch && isConnected) {
-      await ch.assertQueue(queueName, { durable: true })
-      await ch.bindQueue(queueName, EXCHANGE_NAME, routingKey)
-      console.log(`[RabbitMQ] Queue "${queueName}" subscribed to routing key "${routingKey}"`)
+      const dlqName = `${queueName}.dlq`
 
+      // 1. Assert the Dead Letter Exchange
+      await ch.assertExchange(DLX_EXCHANGE, 'direct', { durable: true })
+
+      // 2. Assert the DLQ and bind it to the DLX
+      await ch.assertQueue(dlqName, { durable: true })
+      await ch.bindQueue(dlqName, DLX_EXCHANGE, queueName)
+
+      // 3. Assert the main queue with x-dead-letter-exchange pointing to DLX
+      await ch.assertQueue(queueName, {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': DLX_EXCHANGE,
+          'x-dead-letter-routing-key': queueName,
+        },
+      })
+
+      await ch.bindQueue(queueName, EXCHANGE_NAME, routingKey)
+      console.log(`[RabbitMQ] Queue "${queueName}" subscribed to routing key "${routingKey}" | DLQ: "${dlqName}"`)
+
+      // 4. Consume main queue — nack automatically routes to DLQ
       await ch.consume(queueName, async (msg) => {
         if (!msg) return
 
@@ -82,10 +100,25 @@ export async function subscribeToEvent(
           await handler(data)
           ch.ack(msg)
         } catch (err) {
-          console.error(`[RabbitMQ] Error handling message on queue "${queueName}":`, err)
-          ch.nack(msg, false, false)
+          console.error(`[RabbitMQ] Handler failed on queue "${queueName}" — routing to DLQ "${dlqName}":`, err)
+          ch.nack(msg, false, false) // requeue=false → goes to DLX → DLQ
         }
       })
+
+      // 5. Consume DLQ — log dead letters for visibility / alerting
+      await ch.consume(dlqName, async (msg) => {
+        if (!msg) return
+        try {
+          const data = JSON.parse(msg.content.toString())
+          const deathInfo = msg.properties.headers?.['x-death']?.[0]
+          console.error(
+            `[DLQ] 💀 Dead letter on "${dlqName}" | reason: ${deathInfo?.reason ?? 'unknown'} | routing-key: ${deathInfo?.['routing-keys']?.[0] ?? routingKey}`,
+            data
+          )
+        } catch (_) {}
+        ch.ack(msg) // ack to remove from DLQ after logging
+      })
+
       return
     }
   } catch (error) {

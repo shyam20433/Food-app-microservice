@@ -32,6 +32,9 @@ export default class Delivery extends BaseModel {
   @column()
   public status: DeliveryStatus
 
+  @column()
+  public deliveryOtp: string | null
+
   @column.dateTime()
   public assignedAt: DateTime | null
 

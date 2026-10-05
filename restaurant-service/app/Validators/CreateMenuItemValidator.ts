@@ -5,7 +5,13 @@ import { MenuItemStatus } from 'App/Constants/Status'
 export default class CreateMenuItemValidator {
   constructor(protected ctx: HttpContextContract) {}
 
+  public data = {
+    ...this.ctx.params,
+    ...this.ctx.request.all(),
+  }
+
   public schema = schema.create({
+    restaurantId: schema.string({}, [rules.uuid()]),
     category_id: schema.string({ trim: true }, [rules.uuid()]),
     name: schema.string({ trim: true }, [rules.maxLength(255)]),
     description: schema.string.optional({ trim: true }, [rules.maxLength(1000)]),
@@ -18,6 +24,7 @@ export default class CreateMenuItemValidator {
   })
 
   public messages: CustomMessages = {
+    'restaurantId.uuid': 'restaurantId must be a valid UUID',
     'category_id.required': 'Category ID is required',
     'category_id.uuid': 'Category ID must be a valid UUID',
     'name.required': 'Menu item name is required',

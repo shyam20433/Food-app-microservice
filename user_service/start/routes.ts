@@ -22,7 +22,6 @@ Route.group(() => {
 
 // User Management Routes
 Route.group(() => {
-  Route.get('/', 'UserController.index')
   Route.get('/:id', 'UserController.show')
   Route.put('/:id', 'UserController.update')
   Route.delete('/:id', 'UserController.destroy')
@@ -37,6 +36,15 @@ Route.group(() => {
 })
   .prefix('/users')
   .middleware('jwtAuth')
+
+// Admin Routes (ADMIN / SUPER_ADMIN only)
+Route.group(() => {
+  Route.get('/users', 'UserController.index')
+  Route.get('/users/:id', 'UserController.show')
+})
+  .prefix('/admin')
+  .middleware(['jwtAuth', 'role:ADMIN,SUPER_ADMIN'])
+
 
 // Read-Only System Roles Routes
 Route.group(() => {

@@ -3,9 +3,11 @@ import { OrderInvalidStatusTransitionException } from '../Exceptions/CustomExcep
 
 export class OrderStateService {
   private static allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
-    [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.REJECTED, OrderStatus.CANCELLED],
-    [OrderStatus.CONFIRMED]: [OrderStatus.PREPARING, OrderStatus.CANCELLED],
-    [OrderStatus.PREPARING]: [OrderStatus.READY],
+    [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.REJECTED, OrderStatus.CANCELLED, OrderStatus.CANCELLATION_PENDING],
+    [OrderStatus.CONFIRMED]: [OrderStatus.PREPARING, OrderStatus.CANCELLED, OrderStatus.CANCELLATION_PENDING],
+    [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.CANCELLED, OrderStatus.CANCELLATION_PENDING],
+    // Saga in-flight state: can finalize to CANCELLED (success) or revert (compensation)
+    [OrderStatus.CANCELLATION_PENDING]: [OrderStatus.CANCELLED, OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.PREPARING],
     [OrderStatus.READY]: [OrderStatus.OUT_FOR_DELIVERY],
     [OrderStatus.OUT_FOR_DELIVERY]: [OrderStatus.DELIVERED],
     [OrderStatus.DELIVERED]: [],

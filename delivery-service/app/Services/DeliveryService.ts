@@ -10,12 +10,17 @@ import Delivery from 'App/Models/Delivery'
 import { publishEvent } from 'App/Services/RabbitMQService'
 import { DeliveryStatus } from 'App/Constants/DeliveryStatus'
 import { PartnerAvailability } from 'App/Constants/PartnerAvailability'
+import { Status } from 'App/Constants/Status'
+import { VehicleType } from 'App/Constants/VehicleType'
 import { Roles } from 'App/Constants/Roles'
 import {
   DeliveryNotFoundException,
   ActiveDeliveryNotFoundException,
   DeliveryAccessDeniedException,
   DeliveryPartnerNotFoundException,
+  DeliveryPartnerNotAvailableException,
+  DeliveryAlreadyAssignedException,
+  InvalidOtpException,
 } from 'App/Exceptions/CustomExceptions'
 
 export class DeliveryService {
@@ -48,6 +53,7 @@ export class DeliveryService {
     const trx = await Database.transaction()
 
     try {
+      const otp = Math.floor(1000 + Math.random() * 9000).toString()
       const delivery = await this.deliveryRepo.create(
         {
           orderId: order.id,
@@ -55,6 +61,7 @@ export class DeliveryService {
           pickupAddress: restaurant,
           deliveryAddress: order.deliveryAddress,
           status: DeliveryStatus.ASSIGNING,
+          deliveryOtp: otp,
         },
         { client: trx }
       )
@@ -195,44 +202,34 @@ export class DeliveryService {
     const existing = await this.deliveryRepo.findByOrderId(event.order_id)
     if (existing) return
 
+    const changedBy = event.user_id || '00000000-0000-0000-0000-000000000000'
+    const trx = await Database.transaction()
+
     try {
-      const restaurant = await this.restaurantClient.getRestaurant(event.restaurant_id)
-      const changedBy = event.user_id || '00000000-0000-0000-0000-000000000000'
+      const otp = Math.floor(1000 + Math.random() * 9000).toString()
+      const delivery = await this.deliveryRepo.create(
+        {
+          orderId: event.order_id,
+          restaurantId: event.restaurant_id,
+          pickupAddress: { restaurant_id: event.restaurant_id },
+          deliveryAddress: event.delivery_address,
+          status: DeliveryStatus.ASSIGNING,
+          deliveryOtp: otp,
+        },
+        { client: trx }
+      )
 
-      const trx = await Database.transaction()
-      let delivery: Delivery
-      try {
-        delivery = await this.deliveryRepo.create(
-          {
-            orderId: event.order_id,
-            restaurantId: event.restaurant_id,
-            pickupAddress: restaurant,
-            deliveryAddress: event.delivery_address,
-            status: DeliveryStatus.ASSIGNING,
-          },
-          { client: trx }
-        )
+      await this.historyRepo.createHistory(
+        delivery.id,
+        DeliveryStatus.ASSIGNING,
+        changedBy,
+        { client: trx }
+      )
 
-        await this.historyRepo.createHistory(
-          delivery.id,
-          DeliveryStatus.ASSIGNING,
-          changedBy,
-          { client: trx }
-        )
-
-        await trx.commit()
-      } catch (err) {
-        await trx.rollback()
-        throw err
-      }
-
-      try {
-        await this.assignmentService.assignNearestPartner(delivery.id, changedBy)
-        console.log(`[DeliveryService] Auto-assigned delivery for order ${event.order_id}`)
-      } catch {
-        console.warn(`[DeliveryService] Created delivery for order ${event.order_id}, waiting for available partner`)
-      }
+      await trx.commit()
+      console.log(`[DeliveryService] Created delivery ${delivery.id} for order ${event.order_id}`)
     } catch (err) {
+      await trx.rollback()
       console.error(`[DeliveryService] Failed handling order.confirmed event for order ${event.order_id}:`, err)
     }
   }
@@ -263,10 +260,10 @@ export class DeliveryService {
     // Scrub sensitive partner details
     const partnerInfo = delivery.partner
       ? {
-          name: 'Delivery Partner',
-          vehicle_type: delivery.partner.vehicleType,
-          vehicle_number: delivery.partner.vehicleNumber,
-        }
+        name: 'Delivery Partner',
+        vehicle_type: delivery.partner.vehicleType,
+        vehicle_number: delivery.partner.vehicleNumber,
+      }
       : null
 
     return {
@@ -296,7 +293,7 @@ export class DeliveryService {
 
   public async getPartnerDeliveries(
     userId: string,
-    options?: { page?: number; limit?: number }
+    options?: { page?: number; limit?: number; status?: string }
   ) {
     const partner = await this.partnerRepo.findByUserId(userId)
     if (!partner) throw new DeliveryPartnerNotFoundException()
@@ -319,5 +316,104 @@ export class DeliveryService {
 
   public async adminGetAllDeliveries(options?: { page?: number; limit?: number }) {
     return await this.deliveryRepo.findAll(options)
+  }
+
+  public async getDeliveryOtp(deliveryId: string, _userId: string): Promise<string> {
+    const delivery = await this.deliveryRepo.findById(deliveryId)
+    if (!delivery) throw new DeliveryNotFoundException()
+
+    if (!delivery.deliveryOtp) {
+      delivery.deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString()
+      await delivery.save()
+    }
+
+    return delivery.deliveryOtp
+  }
+
+  public async verifyDeliveryOtp(deliveryId: string, partnerUserId: string, inputOtp: string): Promise<Delivery> {
+    const partner = await this.partnerRepo.findByUserId(partnerUserId)
+    if (!partner) throw new DeliveryPartnerNotFoundException('Delivery partner profile not found')
+
+    const delivery = await this.deliveryRepo.findById(deliveryId)
+    if (!delivery) throw new DeliveryNotFoundException()
+
+    if (delivery.deliveryPartnerId !== partner.id) {
+      throw new DeliveryAccessDeniedException('Delivery is not assigned to this partner')
+    }
+
+    if (!delivery.deliveryOtp || delivery.deliveryOtp !== inputOtp.trim()) {
+      throw new InvalidOtpException('Invalid delivery OTP')
+    }
+
+    return await this.updateDeliveryStatus(deliveryId, partnerUserId, DeliveryStatus.DELIVERED)
+  }
+
+  public async getUnassignedDeliveries(options?: { page?: number; limit?: number }) {
+    return await this.deliveryRepo.findUnassigned(options)
+  }
+
+  public async selectDelivery(
+    deliveryId: string,
+    partnerUserId: string
+  ): Promise<Delivery> {
+    let partner = await this.partnerRepo.findByUserId(partnerUserId)
+    if (!partner) {
+      partner = await this.partnerRepo.create({
+        userId: partnerUserId,
+        vehicleType: VehicleType.BIKE,
+        vehicleNumber: 'TN-37-DEFAULT',
+        latitude: 11.0168,
+        longitude: 76.9558,
+        status: Status.ENABLED,
+        availabilityStatus: PartnerAvailability.AVAILABLE,
+      })
+    }
+
+    // Block partner from grabbing a second order while they are on an active ride
+    if (partner.availabilityStatus === PartnerAvailability.BUSY) {
+      throw new DeliveryPartnerNotAvailableException(
+        'You already have an active delivery. Complete your current order before accepting a new one.'
+      )
+    }
+
+    const delivery = await this.deliveryRepo.findById(deliveryId)
+    if (!delivery) throw new DeliveryNotFoundException()
+
+    if (delivery.deliveryPartnerId) {
+      throw new DeliveryAlreadyAssignedException('This delivery is already claimed by another partner')
+    }
+
+    const trx = await Database.transaction()
+
+    try {
+      await this.deliveryRepo.updateStatus(
+        delivery.id,
+        DeliveryStatus.ASSIGNED,
+        partner.id,
+        { client: trx }
+      )
+
+      await this.partnerRepo.updateAvailability(
+        partner.id,
+        PartnerAvailability.BUSY,
+        undefined,
+        { client: trx }
+      )
+
+      await this.historyRepo.createHistory(
+        delivery.id,
+        DeliveryStatus.ASSIGNED,
+        partner.userId,
+        { client: trx }
+      )
+
+      await trx.commit()
+
+      const updated = await this.deliveryRepo.findById(delivery.id)
+      return updated!
+    } catch (err) {
+      await trx.rollback()
+      throw err
+    }
   }
 }

@@ -1,5 +1,6 @@
 import Route from '@ioc:Adonis/Core/Route'
 
+
 // Health Probes
 Route.group(() => {
   Route.get('/', 'HealthController.check')
@@ -19,17 +20,21 @@ Route.group(() => {
   .prefix('/delivery-partners')
   .middleware('jwtAuth')
 
-// Delivery Routes
+// Delivery Routes (Protected with JWT authentication)
 Route.group(() => {
   Route.post('/', 'DeliveryController.store')
   Route.get('/', 'DeliveryController.index')
+  Route.get('/unassigned', 'DeliveryController.getUnassigned')
   Route.get('/:id', 'DeliveryController.show')
+  Route.get('/:id/otp', 'DeliveryController.getOtp')
+  Route.post('/:id/select', 'DeliveryController.selectDelivery')
   Route.post('/:id/assign', 'AssignmentController.assign')
   Route.patch('/:id/accept', 'DeliveryController.accept')
   Route.patch('/:id/reject', 'DeliveryController.reject')
   Route.patch('/:id/pickup', 'DeliveryController.pickup')
   Route.patch('/:id/out-for-delivery', 'DeliveryController.outForDelivery')
   Route.patch('/:id/delivered', 'DeliveryController.delivered')
+  Route.post('/:id/verify-otp', 'DeliveryController.verifyOtp')
 })
   .prefix('/deliveries')
   .middleware('jwtAuth')

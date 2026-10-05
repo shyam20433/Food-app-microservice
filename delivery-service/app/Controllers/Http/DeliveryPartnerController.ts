@@ -5,7 +5,7 @@ import { ApiResponse } from 'App/Response/ApiResponse'
 import CreateDeliveryPartnerValidator from 'App/Validators/CreateDeliveryPartnerValidator'
 import UpdateDeliveryPartnerValidator from 'App/Validators/UpdateDeliveryPartnerValidator'
 import AvailabilityValidator from 'App/Validators/AvailabilityValidator'
-import PaginationValidator from 'App/Validators/PaginationValidator'
+import DeliveryHistoryValidator from 'App/Validators/DeliveryHistoryValidator'
 
 export default class DeliveryPartnerController {
   private partnerService = new DeliveryPartnerService()
@@ -61,9 +61,13 @@ export default class DeliveryPartnerController {
 
   public async getPartnerDeliveries(ctx: HttpContextContract) {
     const user = (ctx as any).auth.user
-    const params = await ctx.request.validate(PaginationValidator)
+    const params = await ctx.request.validate(DeliveryHistoryValidator)
 
-    const result = await this.deliveryService.getPartnerDeliveries(user.id, params)
+    const result = await this.deliveryService.getPartnerDeliveries(user.id, {
+      page: params.page,
+      limit: params.limit,
+      status: params.status,
+    })
     return ApiResponse.success(ctx, result.data, 'Partner delivery history retrieved successfully', result.meta)
   }
 }

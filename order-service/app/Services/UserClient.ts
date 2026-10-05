@@ -3,7 +3,7 @@ import Env from '@ioc:Adonis/Core/Env'
 import { AddressNotFoundException } from 'App/Exceptions/CustomExceptions'
 
 export class UserClient {
-  private baseUrl = Env.get('USER_SERVICE_URL', 'http://127.0.0.1:3333')
+  private baseUrl = Env.get('USER_SERVICE_URL')
 
   public async getUserAddress(userId: string, addressId: string, token?: string): Promise<any> {
     try {
@@ -22,7 +22,6 @@ export class UserClient {
         throw new AddressNotFoundException()
       }
 
-      // Ensure address belongs to the requesting user
       const ownerId = addressData.user_id || addressData.userId
       if (ownerId && ownerId !== userId) {
         throw new AddressNotFoundException('Delivery address does not belong to the user')
@@ -46,7 +45,6 @@ export class UserClient {
       if (error.response?.status === 404) {
         throw new AddressNotFoundException()
       }
-      // If user-service call fails or is unreachable in standalone mode, throw AddressNotFoundException
       throw new AddressNotFoundException(
         `Unable to fetch delivery address from User Service: ${error.message}`
       )

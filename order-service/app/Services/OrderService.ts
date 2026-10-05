@@ -32,16 +32,11 @@ export class OrderService {
     return `ORD-${today}-${randomDigits}`
   }
 
-  public async checkout(
-    userId: string,
-    payload: { address_id?: string; delivery_address?: any },
-    token?: string
-  ): Promise<Order> {
+  public async checkout(userId: string, payload: { address_id?: string; delivery_address?: any }, token?: string): Promise<Order> {
     // 1. Resolve Delivery Address Snapshot
     let addressSnapshot: any = null
 
     if (payload.address_id) {
-      // Fetch authoritative address snapshot from User Service
       addressSnapshot = await this.userClient.getUserAddress(userId, payload.address_id, token)
     } else if (payload.delivery_address) {
       addressSnapshot = payload.delivery_address
@@ -70,14 +65,8 @@ export class OrderService {
 
       // 5. Validate every item, capture live price and food name snapshot
       for (const cartItem of cart.items) {
-        const menuItem = await this.restaurantClient.verifyMenuItemBelongsToRestaurant(
-          cart.restaurantId,
-          cartItem.menuItemId
-        )
-        await this.restaurantClient.checkMenuItemAvailability(
-          cart.restaurantId,
-          cartItem.menuItemId
-        )
+        const menuItem = await this.restaurantClient.verifyMenuItemBelongsToRestaurant(cart.restaurantId, cartItem.menuItemId)
+        await this.restaurantClient.checkMenuItemAvailability(cart.restaurantId, cartItem.menuItemId)
 
         const livePrice = Number(menuItem.price)
         const subtotal = Math.round(cartItem.quantity * livePrice * 100) / 100
@@ -141,8 +130,11 @@ export class OrderService {
     }
   }
 
-  public async handlePaymentSucceeded(event: { order_id: string; payment_id?: string }) {
-    const order = await this.orderRepo.findById(event.order_id)
+  public async handlePaymentSucceeded(event: { order_id?: string; orderId?: string; payment_id?: string }) {
+    const targetOrderId = event.order_id || event.orderId
+    if (!targetOrderId) return
+
+    const order = await this.orderRepo.findById(targetOrderId)
     if (!order) return
 
     if (order.orderStatus === OrderStatus.PENDING) {
@@ -190,7 +182,7 @@ export class OrderService {
         if (OrderStateService.isTransitionAllowed(order.orderStatus, targetStatus)) {
           await this.orderRepo.updateOrderStatus(order.id, targetStatus)
           console.log(`[OrderService] Order ${order.id} status synced to ${targetStatus}`)
-        } else if (targetStatus === OrderStatus.OUT_FOR_DELIVERY) {
+        } else if (targetStatus === OrderStatus.OUT_FOR_DELIVERY){
           if (order.orderStatus === OrderStatus.CONFIRMED) {
             await this.orderRepo.updateOrderStatus(order.id, OrderStatus.PREPARING)
           }
@@ -214,10 +206,7 @@ export class OrderService {
     }
   }
 
-  public async getUserOrders(
-    userId: string,
-    options?: { page?: number; limit?: number }
-  ): Promise<{ data: Order[]; meta: any }> {
+  public async getUserOrders(userId: string, options?: { page?: number; limit?: number }): Promise<{ data: Order[]; meta: any }> {
     return await this.orderRepo.findByUserId(userId, options)
   }
 
@@ -232,23 +221,29 @@ export class OrderService {
     return order
   }
 
-  public async cancelOrder(userId: string, orderId: string): Promise<Order> {
+  public async cancelOrder(userId: string, orderId: string, reason?: string): Promise<Order> {
     const order = await this.getUserOrderById(userId, orderId)
+    const previousStatus = order.orderStatus
 
-    // Validate state transition to CANCELLED
-    OrderStateService.validateTransition(order.orderStatus, OrderStatus.CANCELLED)
+    OrderStateService.validateTransition(order.orderStatus, OrderStatus.CANCELLATION_PENDING)
+    const pendingOrder = await this.orderRepo.updateOrderStatus(order.id, OrderStatus.CANCELLATION_PENDING)
 
-    return await this.orderRepo.updateOrderStatus(order.id, OrderStatus.CANCELLED)
+    console.log(`[OrderSaga] Order ${order.id} entered CANCELLATION_PENDING by user. Publishing order.cancellation_requested.`)
+    await publishEvent('order.cancellation_requested', {
+      order_id: pendingOrder.id,
+      order_number: pendingOrder.orderNumber,
+      user_id: pendingOrder.userId,
+      restaurant_id: pendingOrder.restaurantId,
+      previous_order_status: previousStatus,
+      reason: reason || 'Cancelled by customer',
+    })
+
+    return pendingOrder
   }
 
-  public async getRestaurantOrders(
-    userId: string,
-    roles: string[],
-    options?: { page?: number; limit?: number; restaurantId?: string; orderStatus?: OrderStatus }
-  ): Promise<{ data: Order[]; meta: any }> {
+  public async getRestaurantOrders(userId: string, roles: string[], options?: { page?: number; limit?: number; restaurantId?: string; orderStatus?: OrderStatus }): Promise<{ data: Order[]; meta: any }> {
     const isAdmin = roles.includes(Roles.ADMIN) || roles.includes(Roles.SUPER_ADMIN)
 
-    // If specific restaurant_id is passed, verify owner control over it
     if (options?.restaurantId) {
       const restaurant = await this.restaurantClient.getRestaurant(options.restaurantId)
       if (!isAdmin && restaurant.owner_id !== userId) {
@@ -257,9 +252,7 @@ export class OrderService {
       return await this.orderRepo.findByRestaurantId(options.restaurantId, options)
     }
 
-    // If restaurant_id is omitted by client:
     if (isAdmin) {
-      // Admins see all orders
       const page = options?.page || 1
       const limit = options?.limit || 20
       const query = Order.query().where('status', '!=', Status.DELETED)
@@ -272,7 +265,6 @@ export class OrderService {
       return { data: json.data as Order[], meta: json.meta }
     }
 
-    // For RESTAURANT_OWNER: find all restaurants owned by this user
     const ownedRestaurants = await this.restaurantClient.getOwnerRestaurants(userId)
     const ownedIds = ownedRestaurants.map((r) => r.id || r.restaurant_id)
 
@@ -300,11 +292,7 @@ export class OrderService {
     return { data: json.data as Order[], meta: json.meta }
   }
 
-  public async getRestaurantOrderById(
-    userId: string,
-    roles: string[],
-    orderId: string
-  ): Promise<Order> {
+  public async getRestaurantOrderById(userId: string, roles: string[], orderId: string): Promise<Order> {
     const order = await this.orderRepo.findById(orderId)
     if (!order) {
       throw new OrderNotFoundException()
@@ -320,17 +308,81 @@ export class OrderService {
     return order
   }
 
-  public async updateRestaurantOrderStatus(
-    userId: string,
-    roles: string[],
-    orderId: string,
-    targetStatus: OrderStatus
-  ): Promise<Order> {
+  public async updateRestaurantOrderStatus(userId: string, roles: string[], orderId: string, targetStatus: OrderStatus): Promise<Order> {
     const order = await this.getRestaurantOrderById(userId, roles, orderId)
 
-    // Validate state transition
-    OrderStateService.validateTransition(order.orderStatus, targetStatus)
+    // Saga: when restaurant cancels, move to CANCELLATION_PENDING (not directly to CANCELLED)
+    // The saga completes (→ CANCELLED) only after payment service confirms the refund
+    if (targetStatus === OrderStatus.CANCELLED) {
+      const previousStatus = order.orderStatus
+      OrderStateService.validateTransition(order.orderStatus, OrderStatus.CANCELLATION_PENDING)
+      const pendingOrder = await this.orderRepo.updateOrderStatus(order.id, OrderStatus.CANCELLATION_PENDING)
 
+      console.log(`[OrderSaga] Order ${order.id} entered CANCELLATION_PENDING. Publishing order.cancellation_requested.`)
+      await publishEvent('order.cancellation_requested', {
+        order_id: pendingOrder.id,
+        order_number: pendingOrder.orderNumber,
+        user_id: pendingOrder.userId,
+        restaurant_id: pendingOrder.restaurantId,
+        previous_order_status: previousStatus,
+        reason: 'Cancelled by restaurant owner',
+      })
+
+      return pendingOrder
+    }
+
+    // All other status updates (PREPARING, READY, etc.) proceed normally
+    OrderStateService.validateTransition(order.orderStatus, targetStatus)
     return await this.orderRepo.updateOrderStatus(order.id, targetStatus)
+  }
+
+  /**
+   * Saga Step 3 (Success) — Payment service confirmed refund was processed.
+   * Finalize the order as CANCELLED.
+   */
+  public async handleRefundProcessed(event: {
+    order_id: string
+    refund_id?: string
+    amount?: number
+    previous_order_status?: string
+  }) {
+    const order = await this.orderRepo.findById(event.order_id)
+    if (!order) {
+      console.warn(`[OrderSaga] handleRefundProcessed: Order ${event.order_id} not found.`)
+      return
+    }
+
+    if (order.orderStatus !== OrderStatus.CANCELLATION_PENDING) {
+      console.warn(`[OrderSaga] handleRefundProcessed: Order ${order.id} is in status '${order.orderStatus}', expected CANCELLATION_PENDING. Skipping.`)
+      return
+    }
+
+    await this.orderRepo.updateOrderStatus(order.id, OrderStatus.CANCELLED)
+    console.log(`[OrderSaga] ✅ Order ${order.id} finalized as CANCELLED after refund ₹${event.amount ?? 'N/A'} confirmed (refund: ${event.refund_id}).`)
+  }
+
+  /**
+   * Saga Compensation — Payment service failed to process refund.
+   * Roll back the order to its previous status so the restaurant can retry or take action.
+   */
+  public async handleRefundFailed(event: {
+    order_id: string
+    reason?: string
+    previous_order_status?: string
+  }) {
+    const order = await this.orderRepo.findById(event.order_id)
+    if (!order) {
+      console.warn(`[OrderSaga] handleRefundFailed: Order ${event.order_id} not found.`)
+      return
+    }
+
+    if (order.orderStatus !== OrderStatus.CANCELLATION_PENDING) {
+      console.warn(`[OrderSaga] handleRefundFailed: Order ${order.id} is in status '${order.orderStatus}', expected CANCELLATION_PENDING. Skipping.`)
+      return
+    }
+
+    const revertTo = (event.previous_order_status as OrderStatus) || OrderStatus.CONFIRMED
+    await this.orderRepo.updateOrderStatus(order.id, revertTo)
+    console.error(`[OrderSaga] ⚠️  Compensation: Order ${order.id} reverted to '${revertTo}' because refund failed — ${event.reason ?? 'unknown reason'}`)
   }
 }

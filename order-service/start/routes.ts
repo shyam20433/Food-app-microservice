@@ -1,5 +1,6 @@
 import Route from '@ioc:Adonis/Core/Route'
 
+
 // Health Check Endpoints (Public & K8s Probes)
 Route.group(() => {
   Route.get('/', 'HealthController.check')
@@ -32,10 +33,18 @@ Route.group(() => {
 Route.group(() => {
   Route.get('/', 'RestaurantOrderController.index')
   Route.get('/:id', 'RestaurantOrderController.show')
-  Route.patch('/:id/confirm', 'RestaurantOrderController.confirm')
-  Route.patch('/:id/reject', 'RestaurantOrderController.reject')
   Route.patch('/:id/preparing', 'RestaurantOrderController.preparing')
   Route.patch('/:id/ready', 'RestaurantOrderController.ready')
+  Route.patch('/:id/cancel', 'RestaurantOrderController.cancel')
 })
   .prefix('/restaurant-orders')
   .middleware(['jwtAuth', 'role:RESTAURANT_OWNER,ADMIN,SUPER_ADMIN'])
+
+// Admin Routes (ADMIN / SUPER_ADMIN only)
+Route.group(() => {
+  Route.get('/orders', 'RestaurantOrderController.index')
+  Route.get('/orders/:id', 'RestaurantOrderController.show')
+})
+  .prefix('/admin')
+  .middleware(['jwtAuth', 'role:ADMIN,SUPER_ADMIN'])
+

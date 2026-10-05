@@ -1,5 +1,6 @@
 import Route from '@ioc:Adonis/Core/Route'
 
+
 // Health Check Endpoints (Public & K8s Probes)
 Route.group(() => {
   Route.get('/', 'HealthController.check')

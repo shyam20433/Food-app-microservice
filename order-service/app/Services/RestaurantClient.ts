@@ -8,7 +8,7 @@ import {
 } from 'App/Exceptions/CustomExceptions'
 
 export class RestaurantClient {
-  private baseUrl = Env.get('RESTAURANT_SERVICE_URL', 'http://127.0.0.1:3334')
+  private baseUrl = Env.get('RESTAURANT_SERVICE_URL')
 
   public async getRestaurant(restaurantId: string): Promise<any> {
     try {
